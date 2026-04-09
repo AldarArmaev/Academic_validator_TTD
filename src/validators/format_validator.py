@@ -30,15 +30,35 @@ def check_paragraph_formatting(doc: Document, rules: dict[str, Any]) -> list[Rep
     
     heading_styles = {"Heading 1", "Heading 2", "Heading 3", "Heading 4", "Heading 5", "Heading 6"}
     
-    para_index = 0
-    for para in doc.paragraphs:
+    # Паттерны для распознавания заголовков
+    chapter_heading_pattern = rules.get("chapter_heading_pattern", r"^Глава \d+\.\s.+")
+    paragraph_heading_pattern = rules.get("paragraph_heading_pattern", r"^\d+\.\d+\.\s.+")
+    
+    for para_index, para in enumerate(doc.paragraphs):
         # Пропускаем заголовки и пустые абзацы
         if para.style and para.style.name in heading_styles:
             continue
         if not para.text.strip():
             continue
         
+        # Пропускаем абзацы, которые являются подписями таблиц или рисунков
+        text_stripped = para.text.strip()
+        if (text_stripped.startswith('Таблица') or 
+            text_stripped.startswith('Рис.') or
+            text_stripped.startswith('Рисунок')):
+            continue
+        
+        # Дополнительная проверка: если у абзаца есть w:outlineLvl – это заголовок
         pPr = para._p.pPr
+        if pPr is not None:
+            outline_lvl = pPr.find(qn('w:outlineLvl'))
+            if outline_lvl is not None:
+                continue
+        
+        # Проверка по паттернам заголовков (для пользовательских стилей)
+        if (re.match(chapter_heading_pattern, text_stripped) or 
+            re.match(paragraph_heading_pattern, text_stripped)):
+            continue
         
         # А) Межстрочный интервал (Ф-2)
         spacing_el = pPr.find(qn('w:spacing')) if pPr else None
@@ -115,24 +135,6 @@ def check_paragraph_formatting(doc: Document, rules: dict[str, Any]) -> list[Rep
                         ))
                 except ValueError:
                     pass
-            else:
-                # Атрибут отсутствует — это ошибка
-                errors.append(ReportError(
-                    id=f"Ф-5-{para_index}",
-                    code="Ф-5",
-                    type="formatting",
-                    severity="error",
-                    location=ErrorLocation(
-                        paragraph_index=para_index,
-                        structural_path=f"Абзац {para_index + 1}"
-                    ),
-                    fragment=para.text[:100],
-                    rule="Отступ первой строки должен быть 1.25 см (720 DXA)",
-                    rule_citation="§4.2, с. 47",
-                    found_value="0",
-                    expected_value=str(expected_first_line_indent),
-                    recommendation="Установите отступ первой строки 1.25 см"
-                ))
         
         # Г) Интервалы до/после (Ф-6)
         if spacing_el is not None:
@@ -184,8 +186,6 @@ def check_paragraph_formatting(doc: Document, rules: dict[str, Any]) -> list[Rep
                         ))
                 except ValueError:
                     pass
-        
-        para_index += 1
     
     return errors
 
