@@ -54,10 +54,11 @@ def make_base_doc():
     """Создаёт документ с правильными полями."""
     doc = Document()
     s = doc.sections[0]
-    s.left_margin = 1701      # 3.0 см
-    s.right_margin = 567       # 1.0 см
-    s.top_margin = 1134      # 2.0 см
-    s.bottom_margin = 1134      # 2.0 см
+    EMU_PER_DXA = 635
+    s.left_margin   = 1701 * EMU_PER_DXA   # 3.0 см = 1701 DXA = 1079135 EMU
+    s.right_margin  = 567  * EMU_PER_DXA   # 1.0 см
+    s.top_margin    = 1134 * EMU_PER_DXA   # 2.0 см
+    s.bottom_margin = 1134 * EMU_PER_DXA   # 2.0 см
     return doc
 
 
