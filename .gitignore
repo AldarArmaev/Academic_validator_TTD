@@ -1,33 +1,10 @@
 ```
-# Compiled Python files
+# Python cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
-# Source: https://github.com/github/gitignore/blob/main/Python.gitignore
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-*$pyc.class
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+# Test cache
+.pytest_cache/
 ```
