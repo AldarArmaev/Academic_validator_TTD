@@ -16,8 +16,8 @@ from typing import Literal, Optional
 from datetime import datetime
 
 class ErrorLocation(BaseModel):
-    page: int
     paragraph_index: int
+    structural_path: str              # пример: «Глава 1 > Параграф 1.2»
     chapter: Optional[str] = None
 
 class ReportError(BaseModel):
@@ -32,7 +32,6 @@ class ReportError(BaseModel):
     found_value: str                 # что нашли
     expected_value: str              # что ожидали
     recommendation: str              # инструкция для исправления
-    # auto_corrected_text НЕ существует — система не генерирует текст
 
 class ReportSummary(BaseModel):
     total_errors: int
@@ -60,7 +59,7 @@ class ValidationReport(BaseModel):
     "size_pt": 14
   },
   "paragraph": {
-    "line_spacing_twips": 360,
+    "line_spacing_twips": 420,
     "line_spacing_rule": "auto",
     "first_line_indent_dxa": 720,
     "first_line_indent_cm": 1.25,
@@ -80,19 +79,13 @@ class ValidationReport(BaseModel):
     "top": 2.0,
     "bottom": 2.0
   },
-  "page_numbers": {
-    "position": "bottom_right",
-    "font_pt": 12,
-    "starts_at_section": "введение",
-    "start_page": 3
-  },
   "volume": {
-    "total_pages_min": 50,
-    "total_pages_max": 60,
-    "theory_chapter_pages_min": 15,
-    "theory_chapter_pages_max": 20,
-    "empirical_chapter_pages_min": 25,
-    "empirical_chapter_pages_max": 30
+    "total_chars_min": 90000,
+    "total_chars_max": 108000,
+    "theory_chapter_chars_min": 27000,
+    "theory_chapter_chars_max": 36000,
+    "empirical_chapter_chars_min": 45000,
+    "empirical_chapter_chars_max": 54000
   },
   "references": {
     "min_sources": 40,
@@ -114,7 +107,11 @@ class ValidationReport(BaseModel):
   "chapter_heading_pattern": "^Глава \\d+\\.\\s.+",
   "paragraph_heading_pattern": "^\\d+\\.\\d+(\\.\\d+)?\\s.+",
   "stop_words_style": ["я ", "мне ", "мой ", "моя "],
-  "stop_words_colloquial": ["короче", "вообще-то", "на самом деле", "типа", "как бы"]
+  "stop_words_colloquial": ["короче", "вообще-то", "на самом деле", "типа", "как бы"],
+  "tolerances": {
+    "dxa": 20,
+    "pt": 0.5
+  }
 }
 ```
 
@@ -168,7 +165,7 @@ def add_correct_paragraph(doc, text: str):
     run = p.add_run(text)
     run.font.name = "Times New Roman"
     run.font.size = Pt(14)
-    set_paragraph_spacing(p, line_twips=360, space_before=0, space_after=0)
+    set_paragraph_spacing(p, line_twips=420, space_before=0, space_after=0)  # 1.5 интервал = 21 pt * 20 twips
     set_first_line_indent(p, dxa=720)
     set_alignment(p, 'both')
     return p
@@ -177,10 +174,11 @@ def make_base_doc():
     """Создаёт документ с правильными полями."""
     doc = Document()
     s = doc.sections[0]
-    s.left_margin   = 1701 * 635
-    s.right_margin  = 567  * 635
-    s.top_margin    = 1134 * 635
-    s.bottom_margin = 1134 * 635
+    # 1 см = 567 twips (DXA). Поля заданы в university_rules.json в twips.
+    s.left_margin   = 1701      # 3.0 см
+    s.right_margin  = 567       # 1.0 см
+    s.top_margin    = 1134      # 2.0 см
+    s.bottom_margin = 1134      # 2.0 см
     return doc
 
 # ── Фикстуры для Модуля 2 (Контур А) ─────────────────────────────────────────
@@ -243,7 +241,7 @@ def wrong_alignment_docx(tmp_path_factory):
     run = p.add_run("Абзац выровнен по левому краю.")
     run.font.name = "Times New Roman"
     run.font.size = Pt(14)
-    set_paragraph_spacing(p, 360)
+    set_paragraph_spacing(p, 420)  # правильный интервал
     set_first_line_indent(p, 720)
     set_alignment(p, 'left')          # ← нарушение Ф-3
     doc.add_heading("Заключение", level=1)
@@ -257,10 +255,11 @@ def wrong_margins_docx(tmp_path_factory):
     path = tmp_path_factory.mktemp("fix") / "wrong_margins.docx"
     doc = Document()
     s = doc.sections[0]
-    s.left_margin   = 1134 * 635     # ← 2 см, нарушение Ф-4
-    s.right_margin  = 567  * 635
-    s.top_margin    = 1134 * 635
-    s.bottom_margin = 1134 * 635
+    # 1 см = 567 twips. Левое поле 2 см = 1134 twips (нарушение Ф-4)
+    s.left_margin   = 1134        # ← 2 см, нарушение Ф-4
+    s.right_margin  = 567
+    s.top_margin    = 1134
+    s.bottom_margin = 1134
     doc.add_heading("Введение", level=1)
     doc.add_heading("Заключение", level=1)
     doc.add_heading("Список литературы", level=1)
@@ -295,7 +294,7 @@ def wrong_para_spacing_docx(tmp_path_factory):
     run = p.add_run("Абзац с отступом после 12 пт.")
     run.font.name = "Times New Roman"
     run.font.size = Pt(14)
-    set_paragraph_spacing(p, line_twips=360, space_before=0, space_after=240)  # ← нарушение Ф-6
+    set_paragraph_spacing(p, line_twips=420, space_before=0, space_after=240)  # ← нарушение Ф-6
     set_first_line_indent(p, 720)
     set_alignment(p, 'both')
     doc.add_heading("Заключение", level=1)
@@ -340,13 +339,8 @@ def heading_with_period_docx(tmp_path_factory):
 @pytest.fixture
 def rules(tmp_path):
     import json
-    rules_path = (
-        __file__
-        .__class__.__mro__[0]  # pathlib trick — просто используй Path
-    )
-    import json
     from pathlib import Path
-    rpath = Path(__file__).parent.parent / "normocontroller" / "backend" / "university_rules.json"
+    rpath = Path(__file__).parent.parent / "university_rules.json"
     with open(rpath) as f:
         return json.load(f)
 ```
@@ -377,18 +371,19 @@ def rules(tmp_path):
 | № | Требование | Значение | XML-атрибут | Раздел |
 |---|-----------|---------|-------------|--------|
 | Ф-1 | Шрифт основного текста | Times New Roman, 14 пт | `w:rFonts w:ascii`, `w:sz = 28` | §4.2, с. 47 |
-| Ф-2 | Межстрочный интервал | 1,5 → `w:line = 360`, `w:lineRule = "auto"` | `w:spacing w:line` | §4.2, с. 47 |
+| Ф-2 | Межстрочный интервал | 1,5 → `w:line = 420`, `w:lineRule = "auto"` | `w:spacing w:line` | §4.2, с. 47 |
 | Ф-3 | Выравнивание основного текста | по ширине → `"both"` | `w:jc w:val` | §4.2, с. 47 |
 | Ф-4 | Поля | лев. 1701 DXA; прав. 567 DXA; верх. 1134 DXA; ниж. 1134 DXA | `w:pgMar` | §4.2, с. 47 |
 | Ф-5 | Абзацный отступ | 1,25 см → 720 DXA | `w:ind w:firstLine` | §4.2, с. 47 |
 | Ф-6 | Интервалы перед и после абзаца | 0,0 пт → 0 twips | `w:spacing w:before`, `w:spacing w:after` | §4.2, с. 47 |
-| Ф-7 | Нумерация страниц: положение | правый нижний угол | поле `PAGE` в нижнем колонтитуле | §4.2, с. 47 |
-| Ф-8 | Нумерация страниц: шрифт | Times New Roman, 12 пт | `w:sz = 24` в колонтитуле | §4.2, с. 47 |
-| Ф-9 | Нумерация начинается с Введения (с. 3) | Титульный лист и содержание без номеров | `w:titlePg`, `w:pgNumType w:start` | §4.2, с. 47 |
-| Ф-10 | На страницах приложений нет номеров | Без нумерации в секции приложений | отдельная `w:sectPr` для приложений | §4.2, с. 47 |
-| Ф-11 | Объём ВКР | 50—60 с. (без приложений) | Подсчёт страниц | §4.1, с. 46 |
-| Ф-12 | Теоретическая глава | 15—20 с. | Подсчёт страниц главы | §3.4, с. 23 |
-| Ф-13 | Эмпирическая глава | 25—30 с. | Подсчёт страниц главы | §3.5, с. 30 |
+
+### 2.1. Объём ВКР (Контур А)
+
+| № | Требование | Значение | Способ проверки | Раздел |
+|---|-----------|---------|-----------------|--------|
+| Ф-11 | Объём ВКР | 90000–108000 знаков с пробелами (≈ 50–60 стр. × 1800 зн.) | Подсчёт символов в основном тексте | §4.1, с. 46 |
+| Ф-12 | Теоретическая глава | 27000–36000 знаков (≈ 15–20 стр.) | Подсчёт символов главы | §3.4, с. 23 |
+| Ф-13 | Эмпирическая глава | 45000–54000 знаков (≈ 25–30 стр.) | Подсчёт символов главы | §3.5, с. 30 |
 
 ### 3. Таблицы и рисунки (Контур А)
 
@@ -421,7 +416,7 @@ def rules(tmp_path):
 | Л-8 | Основная часть источников — последние 10 лет | §3.7, с. 44 | А |
 | Л-9 | Формат автора: `Выготский, Л. С.` (фамилия, пробел, инициалы) | §4.5, с. 54 | А |
 | Л-10 | URL-ссылки: дата обращения `(дата обращения: ДД.ММ.ГГГГ)` | §4.5, с. 58 | А |
-| Л-11 | RAG-верификация: ссылка `[N]` соответствует источнику в списке | §4.3 | Б |
+| Л-11 | Алгоритмическая верификация: ссылка `[N]` соответствует источнику в списке литературы (проверка наличия пункта с номером N) | §4.3 | А |
 | Л-12 | Все тире в библиографии — длинные (–) | §4.5, с. 58 | А |
 
 ### 5. Введение — методологические нормативы (Контур Б)
@@ -461,7 +456,6 @@ def rules(tmp_path):
 |---|-----------|--------|
 | Со-1 | Содержание отражает все заголовки с номерами страниц | §3.2, с. 12 |
 | Со-2 | Выполняется в виде таблицы без границ | §3.2, с. 12 |
-| Со-3 | Нумерация страниц в содержании совпадает с реальными | §3.2, с. 12 |
 
 ### 9. Приложения (Контур А)
 
@@ -487,8 +481,12 @@ def rules(tmp_path):
 #### Сигнатуры функций
 
 ```python
-def anonymize(text: str) -> tuple[str, dict[str, str]]:
-    """Возвращает (анонимизированный текст, маппинг токен→оригинал)."""
+from docx import Document
+
+def anonymize(doc: Document) -> tuple[Document, dict[str, str]]:
+    """Возвращает (анонимизированный Document, маппинг токен→оригинал).
+    Сохраняет привязку к индексам абзацев для последующей локализации ошибок.
+    """
 
 def deanonymize(text: str, mapping: dict[str, str]) -> str:
     """Обратная замена токенов на оригиналы."""
@@ -497,10 +495,16 @@ def parse_docx(docx_path: str) -> str:
     """Конвертирует DOCX в Markdown с иерархией заголовков."""
 
 def detect_chapters(docx_path: str) -> list[Chapter]:
-    """Возвращает список глав с заголовком, уровнем и индексами абзацев."""
+    """Возвращает список глав с заголовком, уровнем и индексами абзацев.
+    Стили нормализуются: приводятся к нижнему регистру, удаляются пробелы.
+    Пример: 'Heading 1' → 'heading1'.
+    """
 
 def extract_formulas(docx_path: str) -> list[Formula]:
-    """Возвращает список формул с latex-представлением и наличием подписи."""
+    """Возвращает список формул по наличию узла <w:oMath>.
+    Проверяет отсутствие <w:drawing> внутри формулы (формула не должна быть картинкой).
+    Проверяет наличие идентификатора вида (1.1) после формулы.
+    """
 ```
 
 ```python
@@ -511,14 +515,14 @@ from dataclasses import dataclass
 class Chapter:
     title: str
     level: int          # 1 или 2
-    style: str          # "Heading1" или "Heading2"
+    style: str          # "heading1" или "heading2" (нормализовано)
     paragraph_indices: list[int]
 
 @dataclass
 class Formula:
     paragraph_index: int
-    latex: str | None   # None если конвертация не удалась
     has_caption: bool   # есть ли идентификатор вида (1.1) после формулы
+    is_picture: bool    # True если найден <w:drawing> внутри <w:oMath>
 ```
 
 #### RED: Тесты
@@ -528,36 +532,84 @@ class Formula:
 
 def test_anonymize_fio():
     """NER заменяет ФИО."""
-    text = "Студент Иванов Иван Иванович выполнил работу"
-    result, mapping = anonymize(text)
-    assert "Иванов" not in result
+    from docx import Document
+    from io import BytesIO
+    
+    doc = Document()
+    doc.add_paragraph("Студент Иванов Иван Иванович выполнил работу")
+    buf = BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    doc = Document(buf)
+    
+    result, mapping = anonymize(doc)
+    text = "".join(p.text for p in result.paragraphs)
+    assert "Иванов" not in text
     assert any("STUDENT_NAME" in k or "PER" in k for k in mapping.values())
 
 def test_anonymize_returns_mapping():
     """Маппинг позволяет восстановить оригинал."""
-    text = "Студент Иванов Иван Иванович"
-    anon, mapping = anonymize(text)
-    restored = deanonymize(anon, mapping)
-    assert "Иванов" in restored
+    from docx import Document
+    from io import BytesIO
+    
+    doc = Document()
+    doc.add_paragraph("Студент Иванов Иван Иванович")
+    buf = BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    doc = Document(buf)
+    
+    anon, mapping = anonymize(doc)
+    restored_text = deanonymize("".join(p.text for p in anon.paragraphs), mapping)
+    assert "Иванов" in restored_text
 
 def test_anonymize_email():
     """Email анонимизируется регуляркой."""
-    text = "email: student@isu.ru"
-    result, mapping = anonymize(text)
-    assert "student@isu.ru" not in result
+    from docx import Document
+    from io import BytesIO
+    
+    doc = Document()
+    doc.add_paragraph("email: student@isu.ru")
+    buf = BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    doc = Document(buf)
+    
+    result, mapping = anonymize(doc)
+    text = "".join(p.text for p in result.paragraphs)
+    assert "student@isu.ru" not in text
     assert any("EMAIL" in k for k in mapping)
 
 def test_anonymize_phone():
     """Телефон анонимизируется регуляркой."""
-    text = "тел. +7 (3952) 24-18-70"
-    result, mapping = anonymize(text)
-    assert "+7 (3952) 24-18-70" not in result
+    from docx import Document
+    from io import BytesIO
+    
+    doc = Document()
+    doc.add_paragraph("тел. +7 (3952) 24-18-70")
+    buf = BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    doc = Document(buf)
+    
+    result, mapping = anonymize(doc)
+    text = "".join(p.text for p in result.paragraphs)
+    assert "+7 (3952) 24-18-70" not in text
     assert any("PHONE" in k for k in mapping)
 
 def test_same_name_same_token():
     """Одно и то же ФИО получает один токен, не два разных."""
-    text = "Иванов написал. Работа Иванова проверена."
-    result, mapping = anonymize(text)
+    from docx import Document
+    from io import BytesIO
+    
+    doc = Document()
+    doc.add_paragraph("Иванов написал. Работа Иванова проверена.")
+    buf = BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    doc = Document(buf)
+    
+    result, mapping = anonymize(doc)
     name_tokens = [k for k in mapping if "NAME" in k or "PER" in k]
     assert len(name_tokens) == 1, f"Ожидали 1 токен, получили: {name_tokens}"
 ```
@@ -576,18 +628,18 @@ def test_detect_chapters_count(correct_docx):
     assert len(chapters) >= 2
 
 def test_detect_chapters_style(correct_docx):
-    """Каждая глава имеет правильный стиль."""
+    """Каждая глава имеет правильный стиль (нормализованный)."""
     chapters = detect_chapters(str(correct_docx))
     for ch in chapters:
-        assert ch.style in ("Heading 1", "Heading 2", "Heading1", "Heading2")
+        assert ch.style in ("heading1", "heading2")
 ```
 
 #### GREEN: Реализация
 
-- `anonymize()` на базе Natasha NER + regex для email/телефонов
+- `anonymize()` на базе Natasha NER + regex для email/телефонов, работает с объектом `Document`
 - `parse_docx()` с python-docx → Markdown
-- `detect_chapters()` по `w:pStyle = Heading1/Heading2`
-- `extract_formulas()` с mathml2latex (при ошибке — `latex=None`)
+- `detect_chapters()` по `w:pStyle = Heading1/Heading2` с нормализацией имён стилей
+- `extract_formulas()` проверяет наличие `<w:oMath>` и отсутствие `<w:drawing>`
 
 ---
 
@@ -595,18 +647,21 @@ def test_detect_chapters_style(correct_docx):
 
 #### Сигнатуры функций
 
+#### Сигнатуры функций
+
 ```python
-def validate_format(docx_path: str, rules: dict) -> ValidationReport:
-    """Объединяет все проверки форматирования и возвращает отчёт."""
+# validate_format декомпозирован на отдельные валидаторы
 
 def check_font_formatting(doc: Document, rules: dict) -> list[ReportError]:
     """Проверяет шрифт и кегль (Ф-1). Пропускает заголовки."""
 
 def check_paragraph_formatting(doc: Document, rules: dict) -> list[ReportError]:
-    """Проверяет интервал (Ф-2), выравнивание (Ф-3), отступ (Ф-5), интервалы до/после (Ф-6)."""
+    """Проверяет интервал (Ф-2), выравнивание (Ф-3), отступ (Ф-5), интервалы до/после (Ф-6).
+    Использует допуски: TOLERANCE_DXA = 20, TOLERANCE_PT = 0.5.
+    """
 
 def check_margins(doc: Document, rules: dict) -> list[ReportError]:
-    """Проверяет поля документа (Ф-4). Допуск ±50 DXA."""
+    """Проверяет поля документа (Ф-4). Допуск ±20 DXA."""
 
 def validate_structure(doc: Document, rules: dict) -> list[ReportError]:
     """Проверяет структуру: разделы (С-1), заголовки (С-5, С-7, С-8, С-9)."""
@@ -621,16 +676,21 @@ def validate_references(doc: Document, rules: dict) -> list[ReportError]:
     """Проверяет ссылки и список литературы (Л-1..Л-5, Л-7..Л-10, Л-12)."""
 
 def validate_volume(doc: Document, rules: dict) -> list[ReportError]:
-    """Проверяет объём работы (Ф-11..Ф-13)."""
+    """Проверяет объём работы по количеству знаков (Ф-11..Ф-13)."""
 
 def validate_formulas(doc: Document, rules: dict) -> list[ReportError]:
-    """Проверяет оформление формул (Фр-1, Фр-2)."""
+    """Проверяет оформление формул (Фр-1, Фр-2): наличие <w:oMath>, отсутствие <w:drawing>."""
 
 def validate_appendices(doc: Document, rules: dict) -> list[ReportError]:
     """Проверяет оформление приложений (П-1..П-4)."""
 
 def validate_typography(doc: Document, rules: dict) -> list[ReportError]:
     """Проверяет типографику (Н-2..Н-5, Н-8)."""
+
+def validate_format(docx_path: str, rules: dict) -> ValidationReport:
+    """Объединяет все проверки форматирования и возвращает отчёт.
+    Вызывает семейство валидаторов check_* и агрегирует результаты.
+    """
 ```
 
 #### RED: Тесты
@@ -639,14 +699,14 @@ def validate_typography(doc: Document, rules: dict) -> list[ReportError]:
 # tests/test_format_validation.py
 
 def test_main_font_error(wrong_font_docx, rules):
-    errors = validate_format(str(wrong_font_docx), rules)
-    font_errors = [e for e in errors if e.code == "Ф-1"]
+    report = validate_format(str(wrong_font_docx), rules)
+    font_errors = [e for e in report.errors if e.code == "Ф-1"]
     assert len(font_errors) >= 1, "Ошибка Ф-1 не обнаружена"
     assert any(e.found_value == "Arial" for e in font_errors)
 
 def test_correct_font_no_error(correct_docx, rules):
-    errors = validate_format(str(correct_docx), rules)
-    assert all(e.code != "Ф-1" for e in errors), "Ложное срабатывание Ф-1"
+    report = validate_format(str(correct_docx), rules)
+    assert all(e.code != "Ф-1" for e in report.errors), "Ложное срабатывание Ф-1"
 
 def test_line_spacing_error(wrong_spacing_docx, rules):
     errors = validate_format(str(wrong_spacing_docx), rules)
@@ -702,12 +762,6 @@ def test_summary_matches_errors(wrong_font_docx, rules):
     report = validate_format(str(wrong_font_docx), rules)
     assert report.summary.total_errors == len(report.errors)
     assert report.summary.formatting == sum(1 for e in report.errors if e.type == "formatting")
-
-def test_no_auto_corrected_text(wrong_font_docx, rules):
-    """Система не генерирует исправленный текст."""
-    report = validate_format(str(wrong_font_docx), rules)
-    for e in report.errors:
-        assert not hasattr(e, "auto_corrected_text"), "Поле auto_corrected_text не должно существовать"
 ```
 
 ```python
@@ -777,7 +831,9 @@ def test_wrong_quotes_error(tmp_path, rules):
 
 ```python
 def validate_style(text: str, rules: dict) -> list[ReportError]:
-    """Проверяет научный стиль: местоимения (Н-1), разговорные обороты, аббревиатуры (Н-6)."""
+    """Проверяет научный стиль: местоимения (Н-1) через детерминированный список стоп-слов.
+    При обнаружении выдавать рекомендацию «используйте пассивный залог».
+    """
 
 def detect_methodological_norms(intro_text: str) -> dict[str, int]:
     """Возвращает dict {норматив: позиция_в_тексте} для 10 нормативов введения."""
@@ -785,12 +841,10 @@ def detect_methodological_norms(intro_text: str) -> dict[str, int]:
 def validate_intro(intro_text: str) -> list[ReportError]:
     """Проверяет структуру введения (В-1..В-6) через LLM."""
 
-def verify_citation(
-    ref_number: int,
-    page: int,
-    pdf_index         # EmbeddingIndex или None
-) -> CitationResult:
-    """RAG-верификация ссылки."""
+def check_textbooks_in_references(reference_list: list[str]) -> list[ReportError]:
+    """Проверка запрета учебников (Л-6) через LLM одним промптом.
+    Задаёт вопрос: «Есть ли среди этих источников учебники или учебные пособия?»
+    """
 
 def audit_chapter(chapter_title: str, chapter_text: str, methodology_context: str) -> ChapterAudit:
     """LLM-анализ соответствия содержания главы её заголовку."""
