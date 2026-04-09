@@ -253,6 +253,31 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
     """
     errors: list[ReportError] = []
     
+    def _get_effective_alignment(para, doc) -> str | None:
+        """Возвращает эффективное выравнивание абзаца с учётом наследования стиля."""
+        # 1. Явное значение в абзаце
+        pPr = para._p.find(qn('w:pPr'))
+        jc_el = pPr.find(qn('w:jc')) if pPr is not None else None
+        if jc_el is not None:
+            return jc_el.get(qn('w:val'))
+        # 2. Из стиля абзаца
+        if para.style and para.style.paragraph_format:
+            fmt = para.style.paragraph_format
+            if fmt.alignment is not None:
+                from docx.enum.text import WD_ALIGN_PARAGRAPH
+                if fmt.alignment == WD_ALIGN_PARAGRAPH.CENTER:
+                    return "center"
+                elif fmt.alignment == WD_ALIGN_PARAGRAPH.LEFT:
+                    return "left"
+                elif fmt.alignment == WD_ALIGN_PARAGRAPH.JUSTIFY:
+                    return "both"
+                elif fmt.alignment == WD_ALIGN_PARAGRAPH.RIGHT:
+                    return "right"
+        # 3. По умолчанию для заголовков — center
+        if para.style and "Heading" in para.style.name:
+            return "center"
+        return None
+    
     # Собираем все заголовки
     titles_lower = [
         p.text.strip().lower() 
@@ -458,11 +483,9 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
             ))
         
         # С-8: Заголовки по центру
-        pPr = para._p.find(qn('w:pPr'))
-        jc_el = pPr.find(qn('w:jc')) if pPr else None
-        alignment = jc_el.get(qn('w:val')) if jc_el else None
+        effective_alignment = _get_effective_alignment(para, doc)
         
-        if alignment != "center":
+        if effective_alignment != "center":
             errors.append(ReportError(
                 id=f"С-8-{para_idx}",
                 code="С-8",
@@ -475,7 +498,7 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
                 fragment=title[:100],
                 rule="Заголовки должны быть выровнены по центру",
                 rule_citation="§3.3, с. 43",
-                found_value=alignment or "не задано",
+                found_value=effective_alignment or "не задано",
                 expected_value="center",
                 recommendation="Установите выравнивание заголовка по центру"
             ))
