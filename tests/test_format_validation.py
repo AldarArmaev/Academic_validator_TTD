@@ -311,6 +311,24 @@ def test_T_1_caption_position_error(rules):
     assert len(errors) >= 1, "Ошибка Т-1 не обнаружена"
 
 
+def test_T_2_table_title_alignment_error(rules):
+    """Т-2: название таблицы не по центру"""
+    docx_path = FIXTURES_DIR / "tables" / "wrong_T_2_title_alignment.docx"
+    if docx_path.exists():
+        report = validate_format(str(docx_path), rules)
+        errors = [e for e in report.errors if e.code == "Т-2"]
+        assert len(errors) >= 1, "Ошибка Т-2 не обнаружена"
+
+
+def test_T_3_table_title_dot_error(rules):
+    """Т-3: точка в названии таблицы"""
+    docx_path = FIXTURES_DIR / "tables" / "wrong_T_3_title_dot.docx"
+    if docx_path.exists():
+        report = validate_format(str(docx_path), rules)
+        errors = [e for e in report.errors if e.code == "Т-3"]
+        assert len(errors) >= 1, "Ошибка Т-3 не обнаружена"
+
+
 def test_T_4_font_size_error(rules):
     """Т-4: неправильный размер шрифта в таблице"""
     docx_path = FIXTURES_DIR / "tables" / "wrong_T_4_font_size.docx"
@@ -319,6 +337,70 @@ def test_T_4_font_size_error(rules):
     report = validate_format(str(docx_path), rules)
     errors = [e for e in report.errors if e.code == "Т-4"]
     assert len(errors) >= 1, "Ошибка Т-4 не обнаружена"
+
+
+def test_T_5_table_width_alignment_error(rules):
+    """Т-5: неправильная ширина или выравнивание в таблице"""
+    docx_path = FIXTURES_DIR / "tables" / "wrong_T_5_width_alignment.docx"
+    if docx_path.exists():
+        report = validate_format(str(docx_path), rules)
+        errors = [e for e in report.errors if e.code == "Т-5"]
+        assert len(errors) >= 1, "Ошибка Т-5 не обнаружена"
+
+
+def test_T_6_numbering_gap_error(rules):
+    """Т-6: пропуск в нумерации таблиц или рисунков"""
+    docx_path = FIXTURES_DIR / "tables" / "wrong_T_6_numbering.docx"
+    if docx_path.exists():
+        report = validate_format(str(docx_path), rules)
+        errors = [e for e in report.errors if e.code == "Т-6"]
+        assert len(errors) >= 1, "Ошибка Т-6 не обнаружена"
+
+
+def test_T_7_figure_caption_alignment_error(rules):
+    """Т-7: подпись рисунка не по центру"""
+    docx_path = FIXTURES_DIR / "figures" / "wrong_T_7_caption_alignment.docx"
+    if docx_path.exists():
+        report = validate_format(str(docx_path), rules)
+        errors = [e for e in report.errors if e.code == "Т-7"]
+        assert len(errors) >= 1, "Ошибка Т-7 не обнаружена"
+
+
+def test_T_8_figure_title_capitalization_error(rules):
+    """Т-8: название рисунка с маленькой буквы или точка в конце"""
+    docx_path = FIXTURES_DIR / "figures" / "wrong_T_8_title_capitalization.docx"
+    if docx_path.exists():
+        report = validate_format(str(docx_path), rules)
+        errors = [e for e in report.errors if e.code == "Т-8"]
+        assert len(errors) >= 1, "Ошибка Т-8 не обнаружена"
+
+
+def test_T_9_conditional_legend_font_error(rules):
+    """Т-9: неправильный размер шрифта условных обозначений"""
+    docx_path = FIXTURES_DIR / "figures" / "wrong_T_9_legend_font.docx"
+    if docx_path.exists():
+        report = validate_format(str(docx_path), rules)
+        errors = [e for e in report.errors if e.code == "Т-9"]
+        assert len(errors) >= 1, "Ошибка Т-9 не обнаружена"
+
+
+def test_T_10_figure_spacing_error(rules):
+    """Т-10: неправильный интервал в подписи рисунка"""
+    docx_path = FIXTURES_DIR / "figures" / "wrong_T_10_spacing.docx"
+    if docx_path.exists():
+        report = validate_format(str(docx_path), rules)
+        errors = [e for e in report.errors if e.code == "Т-10"]
+        assert len(errors) >= 1, "Ошибка Т-10 не обнаружена"
+
+
+def test_T_11_data_duplicate_warning(rules):
+    """Т-11: дублирование данных в таблице и рисунке (предупреждение)"""
+    docx_path = FIXTURES_DIR / "tables" / "wrong_T_11_duplicate.docx"
+    if docx_path.exists():
+        report = validate_format(str(docx_path), rules)
+        errors = [e for e in report.errors if e.code == "Т-11"]
+        # Т-11 это warning, проверяем что он есть
+        assert len(errors) >= 1, "Предупреждение Т-11 не обнаружено"
 
 
 def test_T_12_decimal_point_error(rules):
