@@ -125,3 +125,25 @@ def rules():
         }
     }
     return rules_content
+
+
+# ── Фикстуры для тестов валидации межстрочного интервала ─────────────────────
+
+@pytest.fixture(scope="session")
+def wrong_spacing_docx(tmp_path_factory):
+    """Абзац с одинарным интервалом 240 twips вместо 420 (нарушение Ф-2)."""
+    path = tmp_path_factory.mktemp("fix") / "wrong_spacing.docx"
+    doc = make_base_doc()
+    doc.add_heading("Введение", level=1)
+    add_correct_paragraph(doc, "Правильный абзац с интервалом 1,5.")
+    p = doc.add_paragraph()
+    run = p.add_run("Абзац с неправильным межстрочным интервалом (одинарный).")
+    run.font.name = "Times New Roman"
+    run.font.size = Pt(14)
+    # Устанавливаем одинарный интервал (240 twips вместо 420)
+    set_paragraph_spacing(p, line_twips=240, space_before=0, space_after=0)
+    set_first_line_indent(p, 720)
+    set_alignment(p, 'both')
+    doc.add_heading("Заключение", level=1)
+    doc.save(path)
+    return path
