@@ -115,3 +115,157 @@ def rules():
         "tolerances": {"dxa": 20, "pt": 0.5},
         "references": {"min_sources": 40}
     }
+
+
+# ── Фикстуры для тестов ссылок и списка литературы (Л-*) ─────────────────────
+
+def add_reference_entry(doc, text: str):
+    """Добавляет запись в список литературы."""
+    p = doc.add_paragraph()
+    run = p.add_run(text)
+    run.font.name = "Times New Roman"
+    run.font.size = Pt(14)
+    set_paragraph_spacing(p, line_twips=420, space_before=0, space_after=0)
+    set_alignment(p, 'left')
+    return p
+
+
+@pytest.fixture(scope="session")
+def wrong_L_4_alphabetical_order_docx(tmp_path_factory):
+    """Нарушение алфавитного порядка в списке литературы (Л-4)."""
+    path = tmp_path_factory.mktemp("fix") / "wrong_L_4_alphabetical.docx"
+    doc = make_base_doc()
+    doc.add_heading("Введение", level=1)
+    doc.add_heading("Список литературы", level=1)
+    
+    # Добавляем источники в неправильном порядке (Петров перед Ивановым)
+    add_reference_entry(doc, "2. Петров, А. Б. Книга о психологии. М., 2020.")
+    add_reference_entry(doc, "1. Иванов, И. И. Учебник по психологии. М., 2019.")
+    
+    doc.add_heading("Заключение", level=1)
+    doc.save(path)
+    return path
+
+
+@pytest.fixture(scope="session")
+def wrong_L_4_cyrillic_before_latin_docx(tmp_path_factory):
+    """Латиница перед кириллицей в списке литературы (Л-4)."""
+    path = tmp_path_factory.mktemp("fix") / "wrong_L_4_cyrillic_latin.docx"
+    doc = make_base_doc()
+    doc.add_heading("Введение", level=1)
+    doc.add_heading("Список литературы", level=1)
+    
+    # Сначала иностранный, потом русский — нарушение
+    add_reference_entry(doc, "1. Smith, J. Psychology book. London, 2020.")
+    add_reference_entry(doc, "2. Иванов, И. И. Учебник по психологии. М., 2019.")
+    
+    doc.add_heading("Заключение", level=1)
+    doc.save(path)
+    return path
+
+
+@pytest.fixture(scope="session")
+def wrong_L_5_numbering_docx(tmp_path_factory):
+    """Нарушение сплошной нумерации источников (Л-5)."""
+    path = tmp_path_factory.mktemp("fix") / "wrong_L_5_numbering.docx"
+    doc = make_base_doc()
+    doc.add_heading("Введение", level=1)
+    doc.add_heading("Список литературы", level=1)
+    
+    # Пропуск номера: 1, 3 вместо 1, 2
+    add_reference_entry(doc, "1. Иванов, И. И. Учебник. М., 2019.")
+    add_reference_entry(doc, "3. Петров, П. П. Книга. М., 2020.")
+    
+    doc.add_heading("Заключение", level=1)
+    doc.save(path)
+    return path
+
+
+@pytest.fixture(scope="session")
+def wrong_L_8_old_sources_docx(tmp_path_factory):
+    """Источники старше 10 лет (Л-8)."""
+    path = tmp_path_factory.mktemp("fix") / "wrong_L_8_old_sources.docx"
+    doc = make_base_doc()
+    doc.add_heading("Введение", level=1)
+    doc.add_heading("Список литературы", level=1)
+    
+    # Все источники старые (больше 10 лет)
+    for i in range(1, 11):
+        add_reference_entry(doc, f"{i}. Автор, А. А. Книга. М., 2010.")
+    
+    doc.add_heading("Заключение", level=1)
+    doc.save(path)
+    return path
+
+
+@pytest.fixture(scope="session")
+def wrong_L_9_author_format_docx(tmp_path_factory):
+    """Неправильный формат автора (Л-9)."""
+    path = tmp_path_factory.mktemp("fix") / "wrong_L_9_author_format.docx"
+    doc = make_base_doc()
+    doc.add_heading("Введение", level=1)
+    doc.add_heading("Список литературы", level=1)
+    
+    # Неправильный формат: без запятой или без пробелов
+    add_reference_entry(doc, "1. Иванов И.И. Учебник. М., 2019.")
+    
+    doc.add_heading("Заключение", level=1)
+    doc.save(path)
+    return path
+
+
+@pytest.fixture(scope="session")
+def wrong_L_10_url_no_date_docx(tmp_path_factory):
+    """URL без даты обращения (Л-10)."""
+    path = tmp_path_factory.mktemp("fix") / "wrong_L_10_url_no_date.docx"
+    doc = make_base_doc()
+    doc.add_heading("Введение", level=1)
+    doc.add_heading("Список литературы", level=1)
+    
+    # URL без даты обращения
+    add_reference_entry(doc, "1. Сайт [Электронный ресурс]. URL: https://example.com")
+    
+    doc.add_heading("Заключение", level=1)
+    doc.save(path)
+    return path
+
+
+@pytest.fixture(scope="session")
+def wrong_L_11_invalid_reference_docx(tmp_path_factory):
+    """Ссылка на несуществующий источник (Л-11)."""
+    path = tmp_path_factory.mktemp("fix") / "wrong_L_11_invalid_ref.docx"
+    doc = make_base_doc()
+    doc.add_heading("Введение", level=1)
+    
+    # Ссылка на источник 99, которого нет в списке
+    p = doc.add_paragraph()
+    run = p.add_run("Текст со ссылкой [99].")
+    run.font.name = "Times New Roman"
+    run.font.size = Pt(14)
+    set_paragraph_spacing(p, 420)
+    set_first_line_indent(p, 720)
+    set_alignment(p, 'both')
+    
+    doc.add_heading("Список литературы", level=1)
+    # Только один источник
+    add_reference_entry(doc, "1. Иванов, И. И. Учебник. М., 2019.")
+    
+    doc.add_heading("Заключение", level=1)
+    doc.save(path)
+    return path
+
+
+@pytest.fixture(scope="session")
+def wrong_L_12_hyphen_instead_of_dash_docx(tmp_path_factory):
+    """Дефис вместо длинного тире в библиографии (Л-12)."""
+    path = tmp_path_factory.mktemp("fix") / "wrong_L_12_hyphen.docx"
+    doc = make_base_doc()
+    doc.add_heading("Введение", level=1)
+    doc.add_heading("Список литературы", level=1)
+    
+    # Используем дефис как разделитель (нарушение)
+    add_reference_entry(doc, "1. Иванов, И. И. - М.: Издательство, 2019.")
+    
+    doc.add_heading("Заключение", level=1)
+    doc.save(path)
+    return path

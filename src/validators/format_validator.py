@@ -654,17 +654,26 @@ def validate_references_format(doc: Document, rules: dict[str, Any]) -> list[Rep
     
     Л-1: формат ссылок [N] или [N, с. X]
     Л-3: порядок множественных ссылок
+    Л-4: алфавитный порядок (сначала русские, затем иностранные)
+    Л-5: сплошная нумерация источников
     Л-7: минимум 40 источников
+    Л-8: 70% источников за последние 10 лет
+    Л-9: формат автора "Фамилия, И. О."
+    Л-10: URL с датой обращения
+    Л-11: ссылка соответствует источнику в списке
+    Л-12: длинные тире в библиографии
     """
     errors: list[ReportError] = []
     
     # Находим раздел списка литературы
     ref_section_paragraphs = []
+    ref_section_start_idx = 0
     in_refs = False
     
-    for para in doc.paragraphs:
+    for para_idx, para in enumerate(doc.paragraphs):
         if "список литературы" in para.text.lower():
             in_refs = True
+            ref_section_start_idx = para_idx + 1
             continue
         if in_refs and para.style and "Heading" in para.style.name:
             break
@@ -690,6 +699,228 @@ def validate_references_format(doc: Document, rules: dict[str, Any]) -> list[Rep
             expected_value=str(min_sources),
             recommendation="Добавьте недостающие источники в список литературы"
         ))
+    
+    # Л-5: проверка сплошной нумерации (1, 2, 3, ...)
+    numbering_pattern = re.compile(r'^(\d+)\.')
+    source_numbers = []
+    for idx, para_text in enumerate(ref_section_paragraphs):
+        match = numbering_pattern.match(para_text)
+        if match:
+            source_numbers.append(int(match.group(1)))
+    
+    # Проверка непрерывности нумерации
+    if source_numbers:
+        expected_numbers = list(range(1, len(source_numbers) + 1))
+        for i, (actual, expected) in enumerate(zip(source_numbers, expected_numbers)):
+            if actual != expected:
+                errors.append(ReportError(
+                    id=f"Л-5-num-{i}",
+                    code="Л-5",
+                    type="formatting",
+                    severity="error",
+                    location=ErrorLocation(
+                        paragraph_index=ref_section_start_idx + i,
+                        structural_path="Список литературы"
+                    ),
+                    fragment=ref_section_paragraphs[i][:100],
+                    rule="Нумерация источников должна быть сплошной: 1, 2, 3, ...",
+                    rule_citation="§4.5, с. 52",
+                    found_value=str(actual),
+                    expected_value=str(expected),
+                    recommendation=f"Исправьте номер источника на {expected}"
+                ))
+                break  # Сообщаем только о первой ошибке
+    
+    # Л-4: проверка алфавитного порядка (сначала кириллица, затем латиница)
+    def extract_surname(text: str) -> tuple[str, str]:
+        """Извлекает фамилию автора и определяет язык (cyrillic/latin)."""
+        # Удаляем номер в начале
+        clean_text = re.sub(r'^\d+\.\s*', '', text.strip())
+        # Берём часть до первой запятой или точки
+        author_part = re.split(r'[,.]', clean_text)[0].strip()
+        # Определяем тип символов
+        is_cyrillic = bool(re.search(r'[А-ЯЁа-яё]', author_part))
+        return (author_part.lower(), 'cyrillic' if is_cyrillic else 'latin')
+    
+    def surname_sort_key(item: tuple[int, str]):
+        """Ключ сортировки: сначала кириллица, потом латиница, внутри - по алфавиту."""
+        idx, text = item
+        surname, lang = extract_surname(text)
+        # Кириллица < латиница (0 < 1)
+        lang_order = 0 if lang == 'cyrillic' else 1
+        return (lang_order, surname)
+    
+    if len(ref_section_paragraphs) > 1:
+        indexed_sources = list(enumerate(ref_section_paragraphs))
+        sorted_sources = sorted(indexed_sources, key=surname_sort_key)
+        
+        for i, (orig_idx, _) in enumerate(indexed_sources):
+            sorted_idx, _ = sorted_sources[i]
+            if orig_idx != sorted_idx:
+                # Нашли нарушение порядка
+                curr_surname, curr_lang = extract_surname(ref_section_paragraphs[orig_idx])
+                next_surname, next_lang = extract_surname(ref_section_paragraphs[sorted_idx])
+                
+                errors.append(ReportError(
+                    id=f"Л-4-order-{i}",
+                    code="Л-4",
+                    type="formatting",
+                    severity="error",
+                    location=ErrorLocation(
+                        paragraph_index=ref_section_start_idx + orig_idx,
+                        structural_path="Список литературы"
+                    ),
+                    fragment=ref_section_paragraphs[orig_idx][:100],
+                    rule="Источники должны быть расположены по алфавиту: сначала русские, затем иностранные",
+                    rule_citation="§4.5, с. 52",
+                    found_value=f"«{curr_surname}» после «{next_surname}»",
+                    expected_value=f"«{next_surname}» перед «{curr_surname}»",
+                    recommendation="Расположите источники в алфавитном порядке"
+                ))
+                break  # Только первая ошибка
+    
+    # Л-8: проверка актуальности источников (70% за последние 10 лет)
+    current_year = datetime.now().year
+    year_threshold = current_year - 10
+    year_pattern = re.compile(r'\b(19|20)\d{2}\b')
+    
+    recent_sources_count = 0
+    total_sources_with_year = 0
+    
+    for para_text in ref_section_paragraphs:
+        year_match = year_pattern.search(para_text)
+        if year_match:
+            total_sources_with_year += 1
+            year = int(year_match.group(0))
+            if year >= year_threshold:
+                recent_sources_count += 1
+    
+    if total_sources_with_year > 0:
+        recent_percentage = (recent_sources_count / total_sources_with_year) * 100
+        if recent_percentage < 70:
+            errors.append(ReportError(
+                id="Л-8-recency",
+                code="Л-8",
+                type="formatting",
+                severity="error",
+                location=ErrorLocation(
+                    paragraph_index=ref_section_start_idx,
+                    structural_path="Список литературы"
+                ),
+                fragment="Список литературы",
+                rule=f"Не менее 70% источников должны быть опубликованы в последние {10} лет",
+                rule_citation="§4.5, с. 52",
+                found_value=f"{recent_percentage:.1f}%",
+                expected_value=">= 70%",
+                recommendation="Добавьте более свежие источники"
+            ))
+    
+    # Л-9: проверка формата автора "Фамилия, И. О."
+    # Русский паттерн: Фамилия, И. О.
+    ru_author_pattern = re.compile(r'^\d+\.\s*[А-ЯЁ][а-яё]+(?:-[А-ЯЁ][а-яё]+)?,\s[А-ЯЁ]\.\s[А-ЯЁ]\.')
+    # Английский паттерн: Surname, I. I.
+    en_author_pattern = re.compile(r'^\d+\.\s*[A-Z][a-z]+(?:-[A-Z][a-z]+)?,\s[A-Z]\.\s[A-Z]\.')
+    
+    for idx, para_text in enumerate(ref_section_paragraphs):
+        # Пропускаем источники без автора (начинаются с названия, URLs и т.д.)
+        if not re.match(r'^\d+\.\s*[А-ЯЁA-Z]', para_text):
+            continue
+        
+        ru_match = ru_author_pattern.match(para_text)
+        en_match = en_author_pattern.match(para_text)
+        
+        if not ru_match and not en_match:
+            errors.append(ReportError(
+                id=f"Л-9-author-{idx}",
+                code="Л-9",
+                type="formatting",
+                severity="error",
+                location=ErrorLocation(
+                    paragraph_index=ref_section_start_idx + idx,
+                    structural_path="Список литературы"
+                ),
+                fragment=para_text[:100],
+                rule="Автор должен быть указан в формате: Фамилия, И. О.",
+                rule_citation="§4.5, с. 52",
+                found_value=para_text[:50],
+                expected_value="Фамилия, И. О.",
+                recommendation="Исправьте формат указания автора"
+            ))
+    
+    # Л-10: проверка URL с датой обращения
+    url_pattern = re.compile(r'https?://[^\s]+')
+    access_date_pattern = re.compile(r'\(дата обращения:\s*\d{2}\.\d{2}\.\d{4}\)')
+    
+    for idx, para_text in enumerate(ref_section_paragraphs):
+        if url_pattern.search(para_text):
+            if not access_date_pattern.search(para_text):
+                errors.append(ReportError(
+                    id=f"Л-10-url-{idx}",
+                    code="Л-10",
+                    type="formatting",
+                    severity="error",
+                    location=ErrorLocation(
+                        paragraph_index=ref_section_start_idx + idx,
+                        structural_path="Список литературы"
+                    ),
+                    fragment=para_text[:100],
+                    rule="Для URL-источников должна быть указана дата обращения в формате (дата обращения: ДД.ММ.ГГГГ)",
+                    rule_citation="§4.5, с. 52",
+                    found_value="URL без даты обращения",
+                    expected_value="(дата обращения: ДД.ММ.ГГГГ)",
+                    recommendation="Добавьте дату обращения после URL"
+                ))
+    
+    # Л-11: проверка соответствия ссылок в тексте источникам в списке
+    # Собираем все номера источников из списка литературы
+    valid_source_numbers = set(source_numbers)
+    
+    # Находим все ссылки в тексте [N] и [N, с. X]
+    ref_pattern = re.compile(r'\[(\d+)(?:\s*,\s*с\.\s*\d+)?\]')
+    
+    for para_idx, para in enumerate(doc.paragraphs):
+        for match in ref_pattern.finditer(para.text):
+            ref_number = int(match.group(1))
+            if ref_number not in valid_source_numbers:
+                errors.append(ReportError(
+                    id=f"Л-11-ref-{para_idx}-{ref_number}",
+                    code="Л-11",
+                    type="formatting",
+                    severity="error",
+                    location=ErrorLocation(
+                        paragraph_index=para_idx,
+                        structural_path=f"Абзац {para_idx + 1}"
+                    ),
+                    fragment=match.group(0),
+                    rule="Ссылка в тексте должна соответствовать источнику в списке литературы",
+                    rule_citation="§4.3, с. 49",
+                    found_value=f"№{ref_number}",
+                    expected_value=f"номер от 1 до {len(valid_source_numbers)}",
+                    recommendation=f"Исправьте ссылку или добавьте источник №{ref_number} в список литературы"
+                ))
+    
+    # Л-12: проверка длинных тире (не дефисы)
+    # Ищем дефисы, используемые как тире (между словами/числами, с пробелами)
+    hyphen_as_dash_pattern = re.compile(r'\s-\s|\d-\d')
+    
+    for idx, para_text in enumerate(ref_section_paragraphs):
+        if hyphen_as_dash_pattern.search(para_text):
+            errors.append(ReportError(
+                id=f"Л-12-hyphen-{idx}",
+                code="Л-12",
+                type="formatting",
+                severity="error",
+                location=ErrorLocation(
+                    paragraph_index=ref_section_start_idx + idx,
+                    structural_path="Список литературы"
+                ),
+                fragment=para_text[:100],
+                rule="В библиографии должны использоваться длинные тире «–» (U+2013), а не дефисы «-»",
+                rule_citation="§4.5, с. 52",
+                found_value="-",
+                expected_value="–",
+                recommendation="Замените дефис на длинное тире"
+            ))
     
     # Л-1: формат ссылок [N] или [N, с. X] — круглые скобки нарушение
     inline_pattern = re.compile(r'\(\d+\)')
