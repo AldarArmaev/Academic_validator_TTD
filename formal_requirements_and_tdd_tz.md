@@ -23,12 +23,11 @@ class ErrorLocation(BaseModel):
 class ReportError(BaseModel):
     id: str                          # уникальный id внутри отчёта
     code: str                        # код требования: "Ф-1", "С-5", "Л-7" и т.д.
-    type: Literal["formatting", "style", "citation_check"]
+    type: Literal["formatting", "style"]
     severity: Literal["error", "warning", "info"]
     location: ErrorLocation
     fragment: str                    # до 100 символов из документа
     rule: str                        # формулировка требования
-    rule_citation: str               # цитата из методички: "§4.2, с. 47"
     found_value: str                 # что нашли
     expected_value: str              # что ожидали
     recommendation: str              # инструкция для исправления
@@ -37,7 +36,6 @@ class ReportSummary(BaseModel):
     total_errors: int
     formatting: int
     style: int
-    citations: int
 
 class ValidationReport(BaseModel):
     doc_id: str
@@ -453,8 +451,7 @@ def rules(tmp_path):
 
 | № | Требование | Раздел |
 |---|-----------|--------|
-| Со-1 | Содержание отражает все заголовки с номерами страниц | §3.2, с. 12 |
-| Со-2 | Выполняется в виде таблицы без границ | §3.2, с. 12 |
+| Со-1 | Содержание формируется автоматически средствами текстового редактора (поле TOC) и отражает все заголовки с номерами страниц | §3.2, с. 12 |
 
 ### 9. Приложения (Контур А)
 
@@ -784,11 +781,10 @@ def test_error_has_all_fields(wrong_font_docx, rules):
     for e in errors:
         assert e.id
         assert e.code
-        assert e.type in ("formatting", "style", "citation_check")
+        assert e.type in ("formatting", "style")
         assert e.severity in ("error", "warning", "info")
         assert e.location is not None
         assert e.rule
-        assert e.rule_citation   # цитата из методички
         assert e.found_value is not None
         assert e.expected_value is not None
         assert len(e.recommendation) > 10
@@ -996,7 +992,6 @@ def test_report_schema(correct_docx):
     assert report.summary.total_errors == len(report.errors)
     for error in report.errors:
         assert error.code
-        assert error.rule_citation
         assert error.recommendation
 
 def test_cleanup(correct_docx, tmp_path):
@@ -1044,7 +1039,7 @@ def run_golden_set(
 | Recall (Контур А) | ≥ 85% | `test_benchmark_recall_format` |
 | Precision (Контур Б) | ≥ 80% | `test_benchmark_precision_semantic` |
 | Recall (Контур Б) | ≥ 75% | `test_benchmark_recall_semantic` |
-| Время (60 стр. + 3 PDF) | ≤ 120 сек | `test_benchmark_performance` |
+| Время (60 стр.) | ≤ 120 сек | `test_benchmark_performance` |
 | Анонимизация | 100% ПДн замещены | `test_benchmark_privacy` |
 
 ```python
