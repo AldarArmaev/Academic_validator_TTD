@@ -91,48 +91,30 @@ def check_paragraph_formatting(doc: Document, rules: dict[str, Any]) -> list[Rep
         
         # В) Отступ первой строки (Ф-5)
         ind_el = pPr.find(qn('w:ind')) if pPr else None
-        if ind_el is not None:
-            first_line = ind_el.get(qn('w:firstLine'))
-            if first_line is not None:
-                try:
-                    actual_first_line = int(first_line)
-                    if abs(actual_first_line - expected_first_line_indent) > tolerance_dxa:
-                        errors.append(ReportError(
-                            id=f"Ф-5-{para_index}",
-                            code="Ф-5",
-                            type="formatting",
-                            severity="error",
-                            location=ErrorLocation(
-                                paragraph_index=para_index,
-                                structural_path=f"Абзац {para_index + 1}"
-                            ),
-                            fragment=para.text[:100],
-                            rule="Отступ первой строки должен быть 1.25 см (720 DXA)",
-                            rule_citation="§4.2, с. 47",
-                            found_value=str(actual_first_line),
-                            expected_value=str(expected_first_line_indent),
-                            recommendation="Установите отступ первой строки 1.25 см"
-                        ))
-                except ValueError:
-                    pass
-            else:
-                # Атрибут отсутствует — это ошибка
-                errors.append(ReportError(
-                    id=f"Ф-5-{para_index}",
-                    code="Ф-5",
-                    type="formatting",
-                    severity="error",
-                    location=ErrorLocation(
-                        paragraph_index=para_index,
-                        structural_path=f"Абзац {para_index + 1}"
-                    ),
-                    fragment=para.text[:100],
-                    rule="Отступ первой строки должен быть 1.25 см (720 DXA)",
-                    rule_citation="§4.2, с. 47",
-                    found_value="0",
-                    expected_value=str(expected_first_line_indent),
-                    recommendation="Установите отступ первой строки 1.25 см"
-                ))
+        if ind_el is None:
+            # w:ind вообще не задан — нет отступа
+            first_line_val = 0
+        else:
+            raw = ind_el.get(qn('w:firstLine'))
+            first_line_val = int(raw) if raw is not None else 0
+
+        if abs(first_line_val - expected_first_line_indent) > tolerance_dxa:
+            errors.append(ReportError(
+                id=f"Ф-5-{para_index}",
+                code="Ф-5",
+                type="formatting",
+                severity="error",
+                location=ErrorLocation(
+                    paragraph_index=para_index,
+                    structural_path=f"Абзац {para_index + 1}"
+                ),
+                fragment=para.text[:100],
+                rule="Отступ первой строки должен быть 1.25 см (720 DXA)",
+                rule_citation="§4.2, с. 47",
+                found_value=str(first_line_val),
+                expected_value=str(expected_first_line_indent),
+                recommendation="Установите отступ первой строки 1.25 см"
+            ))
         
         # Г) Интервалы до/после (Ф-6)
         if spacing_el is not None:
@@ -383,7 +365,27 @@ def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
     return []
 
 
-def validate_references_format(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
+def validate_figures(doc: Document, rules: dict) -> list[ReportError]:
+    """Проверяет оформление рисунков (Т-7..Т-10). Спринт 2."""
+    return []
+
+
+def validate_volume(doc: Document, rules: dict) -> list[ReportError]:
+    """Проверяет объём работы по количеству знаков (Ф-11..Ф-13). Спринт 2."""
+    return []
+
+
+def validate_formulas(doc: Document, rules: dict) -> list[ReportError]:
+    """Проверяет оформление формул (Фр-1, Фр-2). Спринт 2."""
+    return []
+
+
+def validate_appendices(doc: Document, rules: dict) -> list[ReportError]:
+    """Проверяет оформление приложений (П-1..П-4). Спринт 2."""
+    return []
+
+
+def validate_references(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
     """
     Проверяет форматирование списка литературы.
     
@@ -474,7 +476,7 @@ def validate_references_format(doc: Document, rules: dict[str, Any]) -> list[Rep
     return errors
 
 
-def validate_typography_format(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
+def validate_typography(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
     """
     Проверяет типографику текста.
     
@@ -583,8 +585,12 @@ def validate_format(docx_path: str, rules: dict[str, Any]) -> ValidationReport:
     errors.extend(check_margins(doc, rules))
     errors.extend(validate_structure(doc, rules))
     errors.extend(validate_tables(doc, rules))
-    errors.extend(validate_references_format(doc, rules))
-    errors.extend(validate_typography_format(doc, rules))
+    errors.extend(validate_references(doc, rules))
+    errors.extend(validate_typography(doc, rules))
+    errors.extend(validate_figures(doc, rules))
+    errors.extend(validate_volume(doc, rules))
+    errors.extend(validate_formulas(doc, rules))
+    errors.extend(validate_appendices(doc, rules))
     
     # Подсчитываем статистику
     formatting_count = sum(1 for e in errors if e.type == "formatting")
