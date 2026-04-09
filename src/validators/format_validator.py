@@ -379,8 +379,216 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
 
 
 def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
-    """Заглушка — будет реализовано в Спринт 2."""
-    return []
+    """
+    Проверяет форматирование таблиц.
+    
+    Т-1: Подпись «Таблица N» над таблицей, выравнивание по правому краю
+    Т-4: Шрифт в таблице Times New Roman, 12 пт (допустимо 11 пт)
+    Т-12: Дробные числа с запятой, а не с точкой
+    """
+    errors: list[ReportError] = []
+    
+    # Получаем элементы body для анализа потока документа
+    body = doc.element.body
+    
+    # Собираем информацию о потоке элементов (параграфы и таблицы)
+    elements_flow = []  # список кортежей (type, index, element)
+    para_index = 0
+    
+    for i, child in enumerate(body):
+        tag = child.tag.split('}')[-1]
+        if tag == 'p':
+            elements_flow.append(('paragraph', para_index, child))
+            para_index += 1
+        elif tag == 'tbl':
+            elements_flow.append(('table', len([e for e in elements_flow if e[0] == 'table']), child))
+    
+    # Т-1: Проверка подписи таблиц
+    table_caption_pattern = re.compile(r'^Таблица\s*\d+', re.IGNORECASE)
+    
+    for elem_type, elem_idx, element in elements_flow:
+        if elem_type != 'table':
+            continue
+        
+        table_index = elem_idx
+        # Ищем подпись непосредственно перед таблицей
+        caption_found = False
+        caption_para = None
+        caption_para_idx = None
+        
+        # Проходим назад от таблицы, ищем подпись
+        for j in range(elements_flow.index((elem_type, elem_idx, element)) - 1, -1, -1):
+            prev_type, prev_idx, prev_element = elements_flow[j]
+            if prev_type != 'paragraph':
+                break
+            
+            # Получаем текст параграфа
+            para_text = ''
+            for t in prev_element.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t'):
+                if t.text:
+                    para_text += t.text
+            para_text = para_text.strip()
+            
+            # Проверяем, является ли это подписью таблицы
+            if table_caption_pattern.match(para_text):
+                caption_found = True
+                caption_para = prev_element
+                caption_para_idx = prev_idx
+                
+                # Проверяем выравнивание (должно быть right)
+                pPr = prev_element.find(qn('w:pPr'))
+                jc_el = pPr.find(qn('w:jc')) if pPr is not None else None
+                alignment = jc_el.get(qn('w:val')) if jc_el is not None else None
+                
+                if alignment != 'right':
+                    errors.append(ReportError(
+                        id=f"Т-1-caption-align-{prev_idx}",
+                        code="Т-1",
+                        type="formatting",
+                        severity="error",
+                        location=ErrorLocation(
+                            paragraph_index=prev_idx,
+                            structural_path=f"Подпись таблицы {table_index + 1}"
+                        ),
+                        fragment=para_text[:100],
+                        rule="Подпись таблицы должна быть выровнена по правому краю",
+                        rule_citation="§4.5, с. 51",
+                        found_value=alignment or "не задано",
+                        expected_value="right",
+                        recommendation="Установите выравнивание подписи таблицы по правому краю"
+                    ))
+                
+                # Проверяем, нет ли точки в конце подписи
+                if para_text.endswith('.'):
+                    errors.append(ReportError(
+                        id=f"Т-1-caption-dot-{prev_idx}",
+                        code="Т-1",
+                        type="formatting",
+                        severity="error",
+                        location=ErrorLocation(
+                            paragraph_index=prev_idx,
+                            structural_path=f"Подпись таблицы {table_index + 1}"
+                        ),
+                        fragment=para_text[:100],
+                        rule="В конце подписи таблицы не должно быть точки",
+                        rule_citation="§4.5, с. 51",
+                        found_value=para_text[-10:] if len(para_text) > 10 else para_text,
+                        expected_value="без точки",
+                        recommendation="Удалите точку в конце подписи таблицы"
+                    ))
+                
+                break
+            
+            # Если параграф не пустой и не подпись, значит подписи нет непосредственно перед таблицей
+            if para_text:
+                break
+        
+        if not caption_found:
+            # Подпись не найдена непосредственно перед таблицей
+            errors.append(ReportError(
+                id=f"Т-1-no-caption-{table_index}",
+                code="Т-1",
+                type="formatting",
+                severity="error",
+                location=ErrorLocation(
+                    paragraph_index=0,
+                    structural_path=f"Таблица {table_index + 1}"
+                ),
+                fragment=f"Таблица {table_index + 1}",
+                rule="Над таблицей должна быть подпись «Таблица N»",
+                rule_citation="§4.5, с. 51",
+                found_value="подпись отсутствует или расположена неверно",
+                expected_value="Таблица N над таблицей",
+                recommendation="Добавьте подпись «Таблица N» непосредственно над таблицей"
+            ))
+    
+    # Т-4: Проверка шрифта в таблицах
+    expected_font_name = "Times New Roman"
+    expected_font_size_pt = 12
+    min_font_size_pt = 11
+    
+    tables_list = list(doc.tables)
+    for table_idx, table in enumerate(tables_list):
+        for row_idx, row in enumerate(table.rows):
+            for cell_idx, cell in enumerate(row.cells):
+                for para in cell.paragraphs:
+                    for run in para.runs:
+                        font_name = run.font.name
+                        font_size = run.font.size.pt if run.font.size else None
+                        
+                        # Проверка названия шрифта
+                        if font_name and font_name != expected_font_name:
+                            errors.append(ReportError(
+                                id=f"Т-4-font-name-{table_idx}-{row_idx}-{cell_idx}",
+                                code="Т-4",
+                                type="formatting",
+                                severity="error",
+                                location=ErrorLocation(
+                                    paragraph_index=0,
+                                    structural_path=f"Таблица {table_idx + 1}, ячейка [{row_idx + 1}, {cell_idx + 1}]"
+                                ),
+                                fragment=para.text[:50],
+                                rule="Шрифт в таблице должен быть Times New Roman",
+                                rule_citation="§4.5, с. 51",
+                                found_value=font_name,
+                                expected_value=expected_font_name,
+                                recommendation="Установите шрифт Times New Roman"
+                            ))
+                        
+                        # Проверка размера шрифта (11-12 pt)
+                        if font_size is not None:
+                            if font_size < min_font_size_pt or font_size > expected_font_size_pt:
+                                errors.append(ReportError(
+                                    id=f"Т-4-font-size-{table_idx}-{row_idx}-{cell_idx}",
+                                    code="Т-4",
+                                    type="formatting",
+                                    severity="error",
+                                    location=ErrorLocation(
+                                        paragraph_index=0,
+                                        structural_path=f"Таблица {table_idx + 1}, ячейка [{row_idx + 1}, {cell_idx + 1}]"
+                                    ),
+                                    fragment=para.text[:50],
+                                    rule="Размер шрифта в таблице должен быть 11-12 пт",
+                                    rule_citation="§4.5, с. 51",
+                                    found_value=str(font_size),
+                                    expected_value=f"{min_font_size_pt}-{expected_font_size_pt}",
+                                    recommendation="Установите размер шрифта 11-12 пт"
+                                ))
+    
+    # Т-12: Проверка десятичного разделителя (запятая вместо точки)
+    # Паттерн для поиска чисел с точкой как десятичным разделителем
+    decimal_point_pattern = re.compile(r'\b\d+\.\d+\b')
+    
+    for table_idx, table in enumerate(tables_list):
+        for row_idx, row in enumerate(table.rows):
+            for cell_idx, cell in enumerate(row.cells):
+                for para in cell.paragraphs:
+                    text = para.text.strip()
+                    if not text:
+                        continue
+                    
+                    # Ищем числа с точкой
+                    matches = decimal_point_pattern.findall(text)
+                    if matches:
+                        for match in matches:
+                            errors.append(ReportError(
+                                id=f"Т-12-decimal-{table_idx}-{row_idx}-{cell_idx}",
+                                code="Т-12",
+                                type="formatting",
+                                severity="error",
+                                location=ErrorLocation(
+                                    paragraph_index=0,
+                                    structural_path=f"Таблица {table_idx + 1}, ячейка [{row_idx + 1}, {cell_idx + 1}]"
+                                ),
+                                fragment=text[:100],
+                                rule="Дробные числа должны использовать запятую как десятичный разделитель",
+                                rule_citation="§4.5, с. 51",
+                                found_value=match,
+                                expected_value=match.replace('.', ','),
+                                recommendation="Замените точку на запятую в дробных числах"
+                            ))
+    
+    return errors
 
 
 def validate_references_format(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
