@@ -241,10 +241,15 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
     Проверяет структуру документа.
     
     С-1: Обязательные разделы
+    С-2: Приложения (нумерация и ссылки)
+    С-3: Разделы с новой страницы
+    С-4: Параграфы не с новой страницы
     С-5: Формат заголовков глав
+    С-6: Нумерация параграфов
     С-7: Заголовки не bold/italic/underline
     С-8: Заголовки по центру без отступа
     С-9: Нет точки в конце заголовка
+    С-10: Внутри параграфов нет подзаголовков
     """
     errors: list[ReportError] = []
     
@@ -279,6 +284,17 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
     service_titles = ["введение", "заключение", "список литературы", "содержание"]
     
     pattern = rules.get("chapter_heading_pattern", r"^Глава \d+\.\s.+")
+    paragraph_heading_pattern = rules.get("paragraph_heading_pattern", r"^\d+\.\d+(\.\d+)?\s.+")
+    
+    # Для проверки С-2: поиск приложений и ссылок на них
+    has_appendix = False
+    appendix_pattern = re.compile(r"Приложение\s+[A-ZА-Я]", re.IGNORECASE)
+    appendix_ref_pattern = re.compile(r"\(прил\.\s*\d+\)", re.IGNORECASE)
+    appendix_references_found = False
+    
+    # Для проверки С-3: отслеживание текущего раздела
+    current_section_start_idx = None
+    section_names = ["содержание", "введение", "заключение", "список литературы"]
     
     for para_idx, para in enumerate(doc.paragraphs):
         if not para.style or "Heading" not in para.style.name:
@@ -286,6 +302,94 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
         
         title = para.text.strip()
         title_lower = title.lower()
+        
+        # Проверка наличия приложений
+        if "приложен" in title_lower:
+            has_appendix = True
+        
+        # Проверка С-3: разделы должны начинаться с новой страницы
+        is_new_section = False
+        for sec_name in section_names:
+            if sec_name in title_lower:
+                is_new_section = True
+                break
+        
+        # Также главы считаются новыми разделами
+        if para.style.name == "Heading 1" and not any(s in title_lower for s in service_titles):
+            is_new_section = True
+        
+        if is_new_section:
+            # Проверяем наличие page break перед этим заголовком
+            pPr = para._p.find(qn('w:pPr'))
+            has_page_break = False
+            
+            if pPr is not None:
+                # Проверяем w:pageBreakBefore
+                page_break_before = pPr.find(qn('w:pageBreakBefore'))
+                if page_break_before is not None:
+                    val = page_break_before.get(qn('w:val'))
+                    if val in ('1', 'true', 'on'):
+                        has_page_break = True
+                
+                # Проверяем наличие разрыва страницы в предыдущем абзаце
+                if para_idx > 0:
+                    prev_para = doc.paragraphs[para_idx - 1]
+                    prev_pPr = prev_para._p.find(qn('w:pPr'))
+                    if prev_pPr is not None:
+                        # Проверяем w:br w:type="page"
+                        for br in prev_pPr.findall(qn('w:br')):
+                            br_type = br.get(qn('w:type'))
+                            if br_type == 'page':
+                                has_page_break = True
+                                break
+            
+            if not has_page_break:
+                errors.append(ReportError(
+                    id=f"С-3-{para_idx}",
+                    code="С-3",
+                    type="formatting",
+                    severity="error",
+                    location=ErrorLocation(
+                        paragraph_index=para_idx,
+                        structural_path=f"Заголовок '{title[:50]}'"
+                    ),
+                    fragment=title[:100],
+                    rule="Каждый новый раздел должен начинаться с новой страницы",
+                    rule_citation="§4.2, с. 47",
+                    found_value="нет разрыва страницы",
+                    expected_value="разрыв страницы перед разделом",
+                    recommendation="Добавьте разрыв страницы перед началом раздела"
+                ))
+        
+        # Проверка С-4: параграфы не должны начинаться с новой страницы
+        if para.style.name in ("Heading 2", "Heading 3"):
+            pPr = para._p.find(qn('w:pPr'))
+            has_page_break = False
+            
+            if pPr is not None:
+                page_break_before = pPr.find(qn('w:pageBreakBefore'))
+                if page_break_before is not None:
+                    val = page_break_before.get(qn('w:val'))
+                    if val in ('1', 'true', 'on'):
+                        has_page_break = True
+            
+            if has_page_break:
+                errors.append(ReportError(
+                    id=f"С-4-{para_idx}",
+                    code="С-4",
+                    type="formatting",
+                    severity="error",
+                    location=ErrorLocation(
+                        paragraph_index=para_idx,
+                        structural_path=f"Параграф '{title[:50]}'"
+                    ),
+                    fragment=title[:100],
+                    rule="Параграфы не должны начинаться с новой страницы",
+                    rule_citation="§4.2, с. 47",
+                    found_value="есть разрыв страницы",
+                    expected_value="нет разрыва страницы",
+                    recommendation="Удалите разрыв страницы перед параграфом"
+                ))
         
         # С-5: Формат заголовков глав (пропускаем служебные)
         if para.style.name == "Heading 1":
@@ -307,6 +411,26 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
                         expected_value="Глава N. Название",
                         recommendation="Измените формат заголовка главы"
                     ))
+        
+        # С-6: Проверка нумерации параграфов (Heading 2, Heading 3)
+        if para.style.name in ("Heading 2", "Heading 3"):
+            if not re.match(paragraph_heading_pattern, title):
+                errors.append(ReportError(
+                    id=f"С-6-{para_idx}",
+                    code="С-6",
+                    type="formatting",
+                    severity="error",
+                    location=ErrorLocation(
+                        paragraph_index=para_idx,
+                        structural_path=f"Параграф {para_idx + 1}"
+                    ),
+                    fragment=title[:100],
+                    rule="Параграфы должны иметь нумерацию вида '1.1.' или '1.1.1.'",
+                    rule_citation="§4.2, с. 47",
+                    found_value=title[:100],
+                    expected_value="N.N. Название или N.N.N. Название",
+                    recommendation="Измените формат заголовка параграфа"
+                ))
         
         # С-7: Заголовки не bold/italic/underline
         has_formatting = False
@@ -373,6 +497,77 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
                 found_value=title[-10:] if len(title) > 10 else title,
                 expected_value="без точки",
                 recommendation="Удалите точку в конце заголовка"
+            ))
+    
+    # С-10: Проверка отсутствия подзаголовков внутри параграфов
+    # Ищем heading стили между заголовками параграфов
+    in_paragraph = False
+    paragraph_start_idx = None
+    
+    for para_idx, para in enumerate(doc.paragraphs):
+        if not para.style:
+            continue
+        
+        style_name = para.style.name
+        
+        # Определяем начало параграфа (Heading 2 или Heading 3)
+        if style_name in ("Heading 2", "Heading 3"):
+            in_paragraph = True
+            paragraph_start_idx = para_idx
+            continue
+        
+        # Если мы внутри параграфа и нашли заголовок уровня 4+ — это нарушение С-10
+        if in_paragraph and style_name in ("Heading 4", "Heading 5", "Heading 6"):
+            title = para.text.strip()
+            if title:  # Пропускаем пустые заголовки
+                errors.append(ReportError(
+                    id=f"С-10-{para_idx}",
+                    code="С-10",
+                    type="formatting",
+                    severity="error",
+                    location=ErrorLocation(
+                        paragraph_index=para_idx,
+                        structural_path=f"Подзаголовок внутри параграфа {paragraph_start_idx}"
+                    ),
+                    fragment=title[:100],
+                    rule="Внутри параграфов не должно быть подзаголовков",
+                    rule_citation="§4.2, с. 47",
+                    found_value=title[:100],
+                    expected_value="обычный текст без подзаголовков",
+                    recommendation="Удалите подзаголовок или оформите его как обычный текст"
+                ))
+        
+        # Выходим из режима параграфа при встрече основного текста или другого заголовка верхнего уровня
+        if in_paragraph:
+            # Если встретили Heading 1 (новая глава) или Normal/другой стиль с текстом - выходим из параграфа
+            if style_name == "Heading 1":
+                in_paragraph = False
+            elif style_name not in ("Heading 2", "Heading 3", "Heading 4", "Heading 5", "Heading 6"):
+                if para.text.strip():  # Если есть текст, считаем что параграф начался
+                    in_paragraph = False
+    
+    # С-2: Проверка приложений (если они есть)
+    if has_appendix:
+        # Проверяем наличие ссылок на приложения в тексте
+        full_text = "\n".join([p.text for p in doc.paragraphs])
+        appendix_refs_found = bool(appendix_ref_pattern.search(full_text))
+        
+        if not appendix_refs_found:
+            errors.append(ReportError(
+                id="С-2-appx-ref",
+                code="С-2",
+                type="formatting",
+                severity="error",
+                location=ErrorLocation(
+                    paragraph_index=0,
+                    structural_path="Приложения"
+                ),
+                fragment="Приложение",
+                rule="Приложения должны иметь ссылки из текста в формате '(прил. N)'",
+                rule_citation="§3.8, с. 44",
+                found_value="ссылки на приложения отсутствуют",
+                expected_value="(прил. N)",
+                recommendation="Добавьте ссылки на приложения в тексте"
             ))
     
     return errors
