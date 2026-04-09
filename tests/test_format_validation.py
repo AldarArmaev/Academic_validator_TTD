@@ -329,8 +329,6 @@ def test_N_6_abbreviation_error(rules):
 
 def test_L_4_alphabetical_order_error(rules, wrong_L_4_alphabetical_order_docx):
     """Л-4: нарушение алфавитного порядка в списке литературы."""
-    from src.validators.format_validator import validate_format
-    
     report = validate_format(str(wrong_L_4_alphabetical_order_docx), rules)
     errors = [e for e in report.errors if e.code == "Л-4"]
     assert len(errors) >= 1, "Ошибка Л-4 не обнаружена"
@@ -338,8 +336,6 @@ def test_L_4_alphabetical_order_error(rules, wrong_L_4_alphabetical_order_docx):
 
 def test_L_4_cyrillic_before_latin_error(rules, wrong_L_4_cyrillic_before_latin_docx):
     """Л-4: латиница перед кириллицей в списке литературы."""
-    from src.validators.format_validator import validate_format
-    
     report = validate_format(str(wrong_L_4_cyrillic_before_latin_docx), rules)
     errors = [e for e in report.errors if e.code == "Л-4"]
     assert len(errors) >= 1, "Ошибка Л-4 не обнаружена"
@@ -347,8 +343,6 @@ def test_L_4_cyrillic_before_latin_error(rules, wrong_L_4_cyrillic_before_latin_
 
 def test_L_5_numbering_error(rules, wrong_L_5_numbering_docx):
     """Л-5: нарушение сплошной нумерации источников."""
-    from src.validators.format_validator import validate_format
-    
     report = validate_format(str(wrong_L_5_numbering_docx), rules)
     errors = [e for e in report.errors if e.code == "Л-5"]
     assert len(errors) >= 1, "Ошибка Л-5 не обнаружена"
@@ -356,8 +350,6 @@ def test_L_5_numbering_error(rules, wrong_L_5_numbering_docx):
 
 def test_L_8_old_sources_error(rules, wrong_L_8_old_sources_docx):
     """Л-8: источники старше 10 лет."""
-    from src.validators.format_validator import validate_format
-    
     report = validate_format(str(wrong_L_8_old_sources_docx), rules)
     errors = [e for e in report.errors if e.code == "Л-8"]
     assert len(errors) >= 1, "Ошибка Л-8 не обнаружена"
@@ -365,8 +357,6 @@ def test_L_8_old_sources_error(rules, wrong_L_8_old_sources_docx):
 
 def test_L_9_author_format_error(rules, wrong_L_9_author_format_docx):
     """Л-9: неправильный формат автора."""
-    from src.validators.format_validator import validate_format
-    
     report = validate_format(str(wrong_L_9_author_format_docx), rules)
     errors = [e for e in report.errors if e.code == "Л-9"]
     assert len(errors) >= 1, "Ошибка Л-9 не обнаружена"
@@ -374,8 +364,6 @@ def test_L_9_author_format_error(rules, wrong_L_9_author_format_docx):
 
 def test_L_10_url_no_date_error(rules, wrong_L_10_url_no_date_docx):
     """Л-10: URL без даты обращения."""
-    from src.validators.format_validator import validate_format
-    
     report = validate_format(str(wrong_L_10_url_no_date_docx), rules)
     errors = [e for e in report.errors if e.code == "Л-10"]
     assert len(errors) >= 1, "Ошибка Л-10 не обнаружена"
@@ -383,8 +371,6 @@ def test_L_10_url_no_date_error(rules, wrong_L_10_url_no_date_docx):
 
 def test_L_11_invalid_reference_error(rules, wrong_L_11_invalid_reference_docx):
     """Л-11: ссылка на несуществующий источник."""
-    from src.validators.format_validator import validate_format
-    
     report = validate_format(str(wrong_L_11_invalid_reference_docx), rules)
     errors = [e for e in report.errors if e.code == "Л-11"]
     assert len(errors) >= 1, "Ошибка Л-11 не обнаружена"
@@ -392,8 +378,6 @@ def test_L_11_invalid_reference_error(rules, wrong_L_11_invalid_reference_docx):
 
 def test_L_12_hyphen_instead_of_dash_error(rules, wrong_L_12_hyphen_instead_of_dash_docx):
     """Л-12: дефис вместо длинного тире в библиографии."""
-    from src.validators.format_validator import validate_format
-    
     report = validate_format(str(wrong_L_12_hyphen_instead_of_dash_docx), rules)
     errors = [e for e in report.errors if e.code == "Л-12"]
     assert len(errors) >= 1, "Ошибка Л-12 не обнаружена"
