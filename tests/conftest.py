@@ -98,13 +98,8 @@ def wrong_font_docx(tmp_path_factory):
 
 @pytest.fixture
 def rules():
-    """Загружает правила из university_rules.json."""
-    rules_content = {
-        "font": {
-            "family": "Times New Roman",
-            "size_half_points": 28,
-            "size_pt": 14
-        },
+    return {
+        "font": {"family": "Times New Roman", "size_half_points": 28, "size_pt": 14},
         "paragraph": {
             "line_spacing_twips": 420,
             "line_spacing_rule": "auto",
@@ -114,15 +109,9 @@ def rules():
             "space_before_twips": 0,
             "space_after_twips": 0
         },
-        "margins_dxa": {
-            "left": 1701,
-            "right": 567,
-            "top": 1134,
-            "bottom": 1134
-        },
-        "tolerances": {
-            "dxa": 20,
-            "pt": 0.5
-        }
+        "margins_dxa": {"left": 1701, "right": 567, "top": 1134, "bottom": 1134},
+        "required_sections": ["введение", "заключение", "список литературы"],
+        "chapter_heading_pattern": "^Глава \\d+\\.\\s.+",
+        "tolerances": {"dxa": 20, "pt": 0.5},
+        "references": {"min_sources": 40}
     }
-    return rules_content
