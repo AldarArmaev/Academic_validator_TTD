@@ -416,7 +416,7 @@ def rules(tmp_path):
 | Л-8 | Основная часть источников — последние 10 лет | §3.7, с. 44 | А |
 | Л-9 | Формат автора: `Выготский, Л. С.` (фамилия, пробел, инициалы) | §4.5, с. 54 | А |
 | Л-10 | URL-ссылки: дата обращения `(дата обращения: ДД.ММ.ГГГГ)` | §4.5, с. 58 | А |
-| Л-11 | Алгоритмическая верификация: ссылка `[N]` соответствует источнику в списке литературы (проверка наличия пункта с номером N) | §4.3 | А |
+| Л-11 | Ссылка [N] соответствует источнику в списке литературы (проверка существования пункта с номером N) | §4.3 | А |
 | Л-12 | Все тире в библиографии — длинные (–) | §4.5, с. 58 | А |
 
 ### 5. Введение — методологические нормативы (Контур Б)
@@ -440,8 +440,7 @@ def rules(tmp_path):
 | Н-4 | Кавычки — уголки `« »`; кавычки в кавычках — лапки `" "` | §4.2, с. 48 |
 | Н-5 | Сложносочинённые слова — дефис (-); между датами/числами — тире (–) | §4.2, с. 48 |
 | Н-6 | Аббревиатуры: при первом использовании — полностью + аббревиатура в скобках | §4.1, с. 46 |
-| Н-7 | Оригинальность текста — не менее 60% | §2, с. 11 |
-| Н-8 | Списки — автоматическая нумерация; единый маркер | §4.2, с. 48 |
+| Н-7 | Списки — автоматическая нумерация; единый маркер | §4.2, с. 48 |
 
 ### 7. Формулы (Контур А)
 
@@ -486,6 +485,12 @@ from docx import Document
 def anonymize(doc: Document) -> tuple[Document, dict[str, str]]:
     """Возвращает (анонимизированный Document, маппинг токен→оригинал).
     Сохраняет привязку к индексам абзацев для последующей локализации ошибок.
+    
+    Исключение для списка литературы: анонимизация (замена ФИО, email, телефонов) 
+    НЕ применяется к разделу «Список литературы». Алгоритм определяет границы 
+    этого раздела по заголовку «Список литературы» (стиль Heading1). 
+    Внутри этого раздела все данные остаются оригинальными. 
+    В основном тексте анонимизация работает как обычно.
     """
 
 def deanonymize(text: str, mapping: dict[str, str]) -> str:
@@ -612,6 +617,37 @@ def test_same_name_same_token():
     result, mapping = anonymize(doc)
     name_tokens = [k for k in mapping if "NAME" in k or "PER" in k]
     assert len(name_tokens) == 1, f"Ожидали 1 токен, получили: {name_tokens}"
+
+def test_anonymize_skips_bibliography():
+    """Фамилии авторов в списке литературы не заменяются."""
+    from docx import Document
+    from io import BytesIO
+    
+    doc = Document()
+    doc.add_heading("Введение", level=1)
+    doc.add_paragraph("Студент Иванов И.И. выполнил работу")
+    doc.add_heading("Список литературы", level=1)
+    doc.add_paragraph("1. Петров П.П. Учебник по Python. – М.: Издательство, 2022.")
+    doc.add_paragraph("2. Сидоров А.А. Научная статья. – 2023.")
+    
+    buf = BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    doc = Document(buf)
+    
+    result, mapping = anonymize(doc)
+    bibliography_text = ""
+    found_bibliography = False
+    for p in result.paragraphs:
+        if "Список литературы" in p.text:
+            found_bibliography = True
+            continue
+        if found_bibliography:
+            bibliography_text += p.text + " "
+    
+    # Фамилии в списке литературы должны остаться без изменений
+    assert "Петров" in bibliography_text, "Фамилия Петров была ошибочно анонимизирована"
+    assert "Сидоров" in bibliography_text, "Фамилия Сидоров была ошибочно анонимизирована"
 ```
 
 ```python
@@ -685,7 +721,7 @@ def validate_appendices(doc: Document, rules: dict) -> list[ReportError]:
     """Проверяет оформление приложений (П-1..П-4)."""
 
 def validate_typography(doc: Document, rules: dict) -> list[ReportError]:
-    """Проверяет типографику (Н-2..Н-5, Н-8)."""
+    """Проверяет типографику (Н-2..Н-5, Н-7)."""
 
 def validate_format(docx_path: str, rules: dict) -> ValidationReport:
     """Объединяет все проверки форматирования и возвращает отчёт.
@@ -859,12 +895,6 @@ from dataclasses import dataclass
 from typing import Literal
 
 @dataclass
-class CitationResult:
-    ref_number: int
-    status: Literal["verified", "not_verified", "source_missing"]
-    score: float | None  # cosine similarity, None если source_missing
-
-@dataclass
 class ChapterAudit:
     chapter_title: str
     is_relevant: bool
@@ -895,42 +925,6 @@ def test_abbreviation_with_explanation_no_error(rules):
         "Социально-психологический тренинг (СПТ) используется. Затем СПТ применяли снова.", rules
     )
     assert all(e.code != "Н-6" for e in errors)
-```
-
-```python
-# tests/test_cross_referencing.py
-
-def test_rag_verified(mock_pdf_index):
-    """
-    mock_pdf_index — pytest fixture, создаёт EmbeddingIndex с проиндексированным PDF,
-    в котором заведомо есть текст на стр. 12.
-    """
-    result = verify_citation(ref_number=1, page=12, pdf_index=mock_pdf_index)
-    assert result.status == "verified"
-    assert result.score >= 0.6
-
-def test_rag_not_verified(mock_pdf_index):
-    """Страница 999 в PDF отсутствует — not_verified."""
-    result = verify_citation(ref_number=1, page=999, pdf_index=mock_pdf_index)
-    assert result.status == "not_verified"
-
-def test_rag_source_missing():
-    """pdf_index=None → source_missing."""
-    result = verify_citation(ref_number=99, page=1, pdf_index=None)
-    assert result.status == "source_missing"
-    assert result.score is None
-
-@pytest.fixture
-def mock_pdf_index(tmp_path):
-    """Создаёт реальный EmbeddingIndex из минимального PDF."""
-    from preprocessing.pdf_utils import create_test_pdf
-    from contour_b.embedder import EmbeddingIndex
-    pdf_path = tmp_path / "source_1.pdf"
-    # Создаёт PDF с текстом "Исследование показало значимые результаты" на стр. 12
-    create_test_pdf(pdf_path, page=12, text="Исследование показало значимые результаты.")
-    index = EmbeddingIndex()
-    index.add_document("source_1", str(pdf_path))
-    return index
 ```
 
 ```python
@@ -976,7 +970,7 @@ def test_map_reduce_calls_llm_per_chapter(mocker, correct_docx):
 def pipeline_run(
     docx_path: str,
     methodology_pdf: str | None = None,
-    source_pdfs: list[str] | None = None,
+    skip_rag: bool = True,
     temp_dir: str | None = None   # если None — создаётся автоматически и удаляется
 ) -> ValidationReport:
     """Полный pipeline: препроцессинг → Контур А ∥ Контур Б → агрегация → очистка."""
@@ -1079,7 +1073,7 @@ def test_benchmark_performance(correct_docx):
 | Спринт | Срок | Фокус | RED (тесты) | GREEN (реализация) |
 |--------|------|-------|------------|-------------------|
 | 1 | 2 нед. | Контур А | Тесты Модуля 2 + фикстуры из conftest.py | `check_font_formatting`, `check_paragraph_formatting`, `check_margins`, `validate_structure`, `university_rules.json` |
-| 2 | 2 нед. | Контур Б | Тесты Модуля 3 + `mock_pdf_index` fixture | `validate_style`, `verify_citation`, `audit_chapter` |
+| 2 | 2 нед. | Контур Б | Тесты Модуля 3 | `validate_style`, `audit_chapter` |
 | 3 | 1 нед. | Privacy + Pipeline | Тесты Модулей 1 и 4 | `anonymize`, `parse_docx`, `pipeline_run` |
 | 4 | 2 нед. | Frontend + Benchmark | Тесты Модуля 5 + `test_benchmark.py` | React UI, `run_golden_set`, бенчмарк |
 

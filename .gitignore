@@ -1,1 +1,1 @@
-Nothing needs to be added to .gitignore since only a markdown file (.md) was modified and there are no build artifacts, dependencies, or temporary files in the changes.
+(formal_requirements_and_tdd_tz.md is a markdown file, which is a source/config file, so no need to add anything to .gitignore)
