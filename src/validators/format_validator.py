@@ -378,6 +378,63 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
     return errors
 
 
+def get_effective_font_size(run, doc) -> float | None:
+    """
+    Получает эффективный размер шрифта для run, учитывая наследование.
+    
+    Порядок проверки:
+    1. Явный атрибут w:sz в w:rPr элемента run
+    2. Размер шрифта из стиля абзаца (para.style.font.size)
+    3. Размер шрифта по умолчанию (12 пт)
+    
+    Возвращает размер в пунктах (pt) или None, если не удалось определить.
+    """
+    from docx.oxml.ns import qn
+    
+    # 1. Проверяем явный размер через python-docx
+    if run.font.size is not None:
+        return run.font.size.pt
+    
+    # 2. Проверяем наличие w:sz в XML напрямую
+    rPr = run._element.find(qn('w:rPr'))
+    if rPr is not None:
+        sz_el = rPr.find(qn('w:sz'))
+        if sz_el is not None:
+            val = sz_el.get(qn('w:val'))
+            if val is not None:
+                try:
+                    # Значение в полупунктах, делим на 2
+                    return int(val) / 2.0
+                except ValueError:
+                    pass
+        
+        # Также проверяем w:szCs (для сложного сценария)
+        szcs_el = rPr.find(qn('w:szCs'))
+        if szcs_el is not None:
+            val = szcs_el.get(qn('w:val'))
+            if val is not None:
+                try:
+                    return int(val) / 2.0
+                except ValueError:
+                    pass
+    
+    # 3. Пытаемся получить размер из стиля абзаца
+    para = run._parent
+    while para is not None and not hasattr(para, 'style'):
+        para = para._parent
+    
+    if para is not None and hasattr(para, 'style') and para.style is not None:
+        try:
+            style_font_size = para.style.font.size
+            if style_font_size is not None:
+                return style_font_size.pt
+        except Exception:
+            pass
+    
+    # 4. Возвращаем значение по умолчанию (12 пт)
+    return 12.0
+
+
 def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
     """
     Проверяет форматирование таблиц.
@@ -504,8 +561,8 @@ def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
     
     # Т-4: Проверка шрифта в таблицах
     expected_font_name = "Times New Roman"
-    expected_font_size_pt = 12
     min_font_size_pt = 11
+    max_font_size_pt = 12
     
     tables_list = list(doc.tables)
     for table_idx, table in enumerate(tables_list):
@@ -514,7 +571,6 @@ def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
                 for para in cell.paragraphs:
                     for run in para.runs:
                         font_name = run.font.name
-                        font_size = run.font.size.pt if run.font.size else None
                         
                         # Проверка названия шрифта
                         if font_name and font_name != expected_font_name:
@@ -535,9 +591,10 @@ def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
                                 recommendation="Установите шрифт Times New Roman"
                             ))
                         
-                        # Проверка размера шрифта (11-12 pt)
+                        # Проверка размера шрифта (11-12 pt) с учётом наследования
+                        font_size = get_effective_font_size(run, doc)
                         if font_size is not None:
-                            if font_size < min_font_size_pt or font_size > expected_font_size_pt:
+                            if font_size < min_font_size_pt or font_size > max_font_size_pt:
                                 errors.append(ReportError(
                                     id=f"Т-4-font-size-{table_idx}-{row_idx}-{cell_idx}",
                                     code="Т-4",
@@ -551,7 +608,7 @@ def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
                                     rule="Размер шрифта в таблице должен быть 11-12 пт",
                                     rule_citation="§4.5, с. 51",
                                     found_value=str(font_size),
-                                    expected_value=f"{min_font_size_pt}-{expected_font_size_pt}",
+                                    expected_value=f"{min_font_size_pt}-{max_font_size_pt}",
                                     recommendation="Установите размер шрифта 11-12 пт"
                                 ))
     
