@@ -628,11 +628,23 @@ def get_effective_font_size(run, doc) -> float | None:
 
 def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
     """
-    Проверяет форматирование таблиц.
+    Проверяет форматирование таблиц и рисунков.
     
+    Таблицы:
     Т-1: Подпись «Таблица N» над таблицей, выравнивание по правому краю
+    Т-2: Название таблицы — ниже таблицы, по центру, без абзацного отступа, с прописной
+    Т-3: Точки после номера и названия таблицы не ставятся
     Т-4: Шрифт в таблице Times New Roman, 12 пт (допустимо 11 пт)
+    Т-5: Автоподбор «по ширине окна»; выравнивание в ячейках — по центру
+    Т-6: Сквозная нумерация таблиц и рисунков
     Т-12: Дробные числа с запятой, а не с точкой
+    
+    Рисунки:
+    Т-7: Подпись рисунка: «Рис. N. Название» — под рисунком, по центру
+    Т-8: Название рисунка с прописной; точка после «Рис. N.» есть, после названия — нет
+    Т-9: Условные обозначения — между рисунком и подписью, 12 пт
+    Т-10: Интервал в названиях рисунков — 1; в названиях таблиц — 1,5
+    Т-11: Данные не дублируются в таблице и рисунке
     """
     errors: list[ReportError] = []
     
@@ -650,6 +662,10 @@ def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
             para_index += 1
         elif tag == 'tbl':
             elements_flow.append(('table', len([e for e in elements_flow if e[0] == 'table']), child))
+    
+    # =============================================================================
+    # ТАБЛИЦЫ
+    # =============================================================================
     
     # Т-1: Проверка подписи таблиц
     table_caption_pattern = re.compile(r'^Таблица\s*\d+', re.IGNORECASE)
@@ -750,6 +766,183 @@ def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
                 recommendation="Добавьте подпись «Таблица N» непосредственно над таблицей"
             ))
     
+    # Т-2: Название таблицы — ниже таблицы, по центру, без абзацного отступа, с прописной
+    # Паттерн для названия таблицы после таблицы: «Таблица N — Название»
+    table_title_below_pattern = re.compile(r'^Таблица\s*\d+\s*—\s*.+', re.IGNORECASE)
+    
+    for elem_type, elem_idx, element in elements_flow:
+        if elem_type != 'table':
+            continue
+        
+        table_index = elem_idx
+        
+        # Ищем название непосредственно после таблицы
+        current_idx_in_flow = elements_flow.index((elem_type, elem_idx, element))
+        
+        for j in range(current_idx_in_flow + 1, len(elements_flow)):
+            next_type, next_idx, next_element = elements_flow[j]
+            
+            if next_type != 'paragraph':
+                break
+            
+            # Получаем текст параграфа
+            para_text = ''
+            for t in next_element.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t'):
+                if t.text:
+                    para_text += t.text
+            para_text = para_text.strip()
+            
+            # Пропускаем пустые параграфы
+            if not para_text:
+                continue
+            
+            # Проверяем, является ли это названием таблицы (после таблицы)
+            if table_title_below_pattern.match(para_text):
+                pPr = next_element.find(qn('w:pPr'))
+                
+                # Проверяем выравнивание (должно быть center)
+                jc_el = pPr.find(qn('w:jc')) if pPr is not None else None
+                alignment = jc_el.get(qn('w:val')) if jc_el is not None else None
+                
+                if alignment != 'center':
+                    errors.append(ReportError(
+                        id=f"Т-2-align-{next_idx}",
+                        code="Т-2",
+                        type="formatting",
+                        severity="error",
+                        location=ErrorLocation(
+                            paragraph_index=next_idx,
+                            structural_path=f"Название таблицы {table_index + 1}"
+                        ),
+                        fragment=para_text[:100],
+                        rule="Название таблицы должно быть выровнено по центру",
+                        rule_citation="§4.4, с. 50-52",
+                        found_value=alignment or "не задано",
+                        expected_value="center",
+                        recommendation="Установите выравнивание по центру"
+                    ))
+                
+                # Проверяем отступ первой строки (должен быть 0)
+                ind_el = pPr.find(qn('w:ind')) if pPr is not None else None
+                first_line = ind_el.get(qn('w:firstLine')) if ind_el is not None else None
+                if first_line is not None:
+                    try:
+                        first_line_val = int(first_line)
+                        if first_line_val != 0:
+                            errors.append(ReportError(
+                                id=f"Т-2-indent-{next_idx}",
+                                code="Т-2",
+                                type="formatting",
+                                severity="error",
+                                location=ErrorLocation(
+                                    paragraph_index=next_idx,
+                                    structural_path=f"Название таблицы {table_index + 1}"
+                                ),
+                                fragment=para_text[:100],
+                                rule="Название таблицы должно быть без абзацного отступа",
+                                rule_citation="§4.4, с. 50-52",
+                                found_value=str(first_line_val),
+                                expected_value="0",
+                                recommendation="Установите отступ первой строки 0"
+                            ))
+                    except ValueError:
+                        pass
+                
+                # Проверяем, что первая буква названия заглавная (после «Таблица N —»)
+                title_match = re.match(r'^Таблица\s*\d+\s*—\s*(.+)$', para_text, re.IGNORECASE)
+                if title_match:
+                    title_text = title_match.group(1).strip()
+                    if title_text and title_text[0].islower():
+                        errors.append(ReportError(
+                            id=f"Т-2-capital-{next_idx}",
+                            code="Т-2",
+                            type="formatting",
+                            severity="error",
+                            location=ErrorLocation(
+                                paragraph_index=next_idx,
+                                structural_path=f"Название таблицы {table_index + 1}"
+                            ),
+                            fragment=para_text[:100],
+                            rule="Название таблицы должно начинаться с прописной буквы",
+                            rule_citation="§4.4, с. 50-52",
+                            found_value=title_text[:20],
+                            expected_value="с заглавной буквы",
+                            recommendation="Начните название таблицы с прописной буквы"
+                        ))
+                break
+            
+            # Если встретился другой непустой параграф, прерываем поиск
+            break
+    
+    # Т-3: Точки после номера и названия таблицы не ставятся
+    # «Таблица 1» (без точки), название таблицы не заканчивается на '.'
+    for elem_type, elem_idx, element in elements_flow:
+        if elem_type != 'table':
+            continue
+        
+        table_index = elem_idx
+        current_idx_in_flow = elements_flow.index((elem_type, elem_idx, element))
+        
+        # Проверяем название после таблицы
+        for j in range(current_idx_in_flow + 1, len(elements_flow)):
+            next_type, next_idx, next_element = elements_flow[j]
+            
+            if next_type != 'paragraph':
+                break
+            
+            para_text = ''
+            for t in next_element.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t'):
+                if t.text:
+                    para_text += t.text
+            para_text = para_text.strip()
+            
+            if not para_text:
+                continue
+            
+            # Проверяем паттерн названия таблицы
+            if table_title_below_pattern.match(para_text):
+                # Проверяем, нет ли точки после номера (Таблица 1.)
+                dot_after_number = re.search(r'^Таблица\s*\d+\.', para_text, re.IGNORECASE)
+                if dot_after_number:
+                    errors.append(ReportError(
+                        id=f"Т-3-dot-after-number-{next_idx}",
+                        code="Т-3",
+                        type="formatting",
+                        severity="error",
+                        location=ErrorLocation(
+                            paragraph_index=next_idx,
+                            structural_path=f"Название таблицы {table_index + 1}"
+                        ),
+                        fragment=para_text[:100],
+                        rule="После номера таблицы не должна ставиться точка",
+                        rule_citation="§4.4, с. 50-52",
+                        found_value=para_text[:30],
+                        expected_value="Таблица N (без точки)",
+                        recommendation="Удалите точку после номера таблицы"
+                    ))
+                
+                # Проверяем, нет ли точки в конце названия
+                if para_text.rstrip().endswith('.'):
+                    errors.append(ReportError(
+                        id=f"Т-3-dot-at-end-{next_idx}",
+                        code="Т-3",
+                        type="formatting",
+                        severity="error",
+                        location=ErrorLocation(
+                            paragraph_index=next_idx,
+                            structural_path=f"Название таблицы {table_index + 1}"
+                        ),
+                        fragment=para_text[:100],
+                        rule="В конце названия таблицы не должна ставиться точка",
+                        rule_citation="§4.4, с. 50-52",
+                        found_value=para_text[-20:] if len(para_text) > 20 else para_text,
+                        expected_value="без точки в конце",
+                        recommendation="Удалите точку в конце названия таблицы"
+                    ))
+                break
+            
+            break
+    
     # Т-4: Проверка шрифта в таблицах
     expected_font_name = "Times New Roman"
     min_font_size_pt = 11
@@ -803,6 +996,158 @@ def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
                                     recommendation="Установите размер шрифта 11-12 пт"
                                 ))
     
+    # Т-5: Автоподбор «по ширине окна»; выравнивание в ячейках — по центру
+    # tblPr -> tblW w:type="auto" или "pct", для ячеек jc w:val="center"
+    for table_idx, table in enumerate(tables_list):
+        tbl_element = table._tbl
+        tblPr = tbl_element.tblPr
+        
+        # Проверяем ширину таблицы
+        if tblPr is not None:
+            # Используем XML-поиск вместо атрибута
+            tblW = tblPr.find(qn('w:tblW'))
+            if tblW is not None:
+                w_type = tblW.get(qn('w:type'))
+                # Допустимые значения: auto, pct (проценты), nil
+                if w_type not in ['auto', 'pct', 'nil']:
+                    errors.append(ReportError(
+                        id=f"Т-5-width-{table_idx}",
+                        code="Т-5",
+                        type="formatting",
+                        severity="error",
+                        location=ErrorLocation(
+                            paragraph_index=0,
+                            structural_path=f"Таблица {table_idx + 1}"
+                        ),
+                        fragment=f"Таблица {table_idx + 1}",
+                        rule="Таблица должна иметь автоподбор по ширине окна",
+                        rule_citation="§4.4, с. 50-52",
+                        found_value=w_type or "не задано",
+                        expected_value="auto или pct",
+                        recommendation="Установите автоподбор ширины таблицы"
+                    ))
+        
+        # Проверяем выравнивание в ячейках
+        for row_idx, row in enumerate(table.rows):
+            for cell_idx, cell in enumerate(row.cells):
+                for para in cell.paragraphs:
+                    pPr = para._p.pPr
+                    if pPr is not None:
+                        jc_el = pPr.find(qn('w:jc'))
+                        if jc_el is not None:
+                            alignment = jc_el.get(qn('w:val'))
+                            # Для ячеек допускается center, left, right, both
+                            # Требуется center
+                            if alignment != 'center':
+                                errors.append(ReportError(
+                                    id=f"Т-5-cell-align-{table_idx}-{row_idx}-{cell_idx}",
+                                    code="Т-5",
+                                    type="formatting",
+                                    severity="error",
+                                    location=ErrorLocation(
+                                        paragraph_index=0,
+                                        structural_path=f"Таблица {table_idx + 1}, ячейка [{row_idx + 1}, {cell_idx + 1}]"
+                                    ),
+                                    fragment=para.text[:50],
+                                    rule="Текст в ячейках таблицы должен быть выровнен по центру",
+                                    rule_citation="§4.4, с. 50-52",
+                                    found_value=alignment or "не задано",
+                                    expected_value="center",
+                                    recommendation="Установите выравнивание по центру в ячейке"
+                                ))
+    
+    # Т-6: Сквозная нумерация таблиц и рисунков
+    # Проверить, что номера таблиц/рисунков идут подряд (1,2,3...) без пропусков и сброса
+    table_numbers = []
+    figure_numbers = []
+    
+    # Собираем номера таблиц из подписей над таблицами
+    for elem_type, elem_idx, element in elements_flow:
+        if elem_type != 'table':
+            continue
+        
+        table_index = elem_idx
+        current_idx_in_flow = elements_flow.index((elem_type, elem_idx, element))
+        
+        # Ищем подпись перед таблицей
+        for j in range(current_idx_in_flow - 1, -1, -1):
+            prev_type, prev_idx, prev_element = elements_flow[j]
+            if prev_type != 'paragraph':
+                break
+            
+            para_text = ''
+            for t in prev_element.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t'):
+                if t.text:
+                    para_text += t.text
+            para_text = para_text.strip()
+            
+            if not para_text:
+                continue
+            
+            # Извлекаем номер таблицы из подписи
+            match = re.match(r'^Таблица\s*(\d+)', para_text, re.IGNORECASE)
+            if match:
+                table_numbers.append(int(match.group(1)))
+                break
+            
+            # Если встретился другой непустой параграф, прерываем
+            break
+    
+    # Собираем номера рисунков из подписей
+    figure_caption_pattern = re.compile(r'^Рис\.?\s*(\d+)', re.IGNORECASE)
+    
+    for para_idx, para in enumerate(doc.paragraphs):
+        text = para.text.strip()
+        match = figure_caption_pattern.match(text)
+        if match:
+            figure_numbers.append(int(match.group(1)))
+    
+    # Проверяем непрерывность нумерации таблиц
+    if table_numbers:
+        expected_table_nums = list(range(1, len(table_numbers) + 1))
+        for i, (actual, expected) in enumerate(zip(table_numbers, expected_table_nums)):
+            if actual != expected:
+                errors.append(ReportError(
+                    id=f"Т-6-table-num-{i}",
+                    code="Т-6",
+                    type="formatting",
+                    severity="error",
+                    location=ErrorLocation(
+                        paragraph_index=0,
+                        structural_path=f"Таблица {i + 1}"
+                    ),
+                    fragment=f"Таблица {actual}",
+                    rule="Нумерация таблиц должна быть сквозной: 1, 2, 3, ...",
+                    rule_citation="§4.4, с. 50-52",
+                    found_value=str(actual),
+                    expected_value=str(expected),
+                    recommendation=f"Исправьте номер таблицы на {expected}"
+                ))
+                break
+    
+    # Проверяем непрерывность нумерации рисунков
+    if figure_numbers:
+        expected_figure_nums = list(range(1, len(figure_numbers) + 1))
+        for i, (actual, expected) in enumerate(zip(figure_numbers, expected_figure_nums)):
+            if actual != expected:
+                errors.append(ReportError(
+                    id=f"Т-6-figure-num-{i}",
+                    code="Т-6",
+                    type="formatting",
+                    severity="error",
+                    location=ErrorLocation(
+                        paragraph_index=0,
+                        structural_path=f"Рисунок {i + 1}"
+                    ),
+                    fragment=f"Рис. {actual}",
+                    rule="Нумерация рисунков должна быть сквозной: 1, 2, 3, ...",
+                    rule_citation="§4.4, с. 50-52",
+                    found_value=str(actual),
+                    expected_value=str(expected),
+                    recommendation=f"Исправьте номер рисунка на {expected}"
+                ))
+                break
+    
     # Т-12: Проверка десятичного разделителя (запятая вместо точки)
     # Паттерн для поиска чисел с точкой как десятичным разделителем
     decimal_point_pattern = re.compile(r'\b\d+\.\d+\b')
@@ -835,6 +1180,243 @@ def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
                                 expected_value=match.replace('.', ','),
                                 recommendation="Замените точку на запятую в дробных числах"
                             ))
+    
+    # =============================================================================
+    # РИСУНКИ
+    # =============================================================================
+    
+    # Собираем информацию о рисунках в потоке элементов
+    # Ищем w:drawing внутри параграфов
+    figure_elements = []  # (para_index, element)
+    
+    for para_idx, para in enumerate(doc.paragraphs):
+        drawing = para._p.find(qn('w:drawing'))
+        if drawing is not None:
+            figure_elements.append((para_idx, para._p))
+    
+    # Т-7: Подпись рисунка: «Рис. N. Название» — под рисунком, по центру
+    # Т-8: Название рисунка с прописной; точка после «Рис. N.» есть, после названия — нет
+    # Т-9: Условные обозначения — между рисунком и подписью, 12 пт
+    # Т-10: Интервал в названиях рисунков — 1; в названиях таблиц — 1,5
+    
+    figure_caption_pattern_full = re.compile(r'^Рис\.?\s*(\d+)\.\s*(.+)$', re.IGNORECASE)
+    
+    for fig_idx, (fig_para_idx, fig_element) in enumerate(figure_elements):
+        # Находим индекс этого параграфа в elements_flow
+        flow_idx = None
+        for i, (ftype, fidx, felem) in enumerate(elements_flow):
+            if ftype == 'paragraph' and felem == fig_element:
+                flow_idx = i
+                break
+        
+        if flow_idx is None:
+            continue
+        
+        # Ищем подпись после рисунка
+        caption_para = None
+        caption_para_idx = None
+        conditional_legend_para = None  # Для Т-9
+        
+        for j in range(flow_idx + 1, len(elements_flow)):
+            next_type, next_idx, next_element = elements_flow[j]
+            
+            if next_type != 'paragraph':
+                break
+            
+            para_text = ''
+            for t in next_element.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t'):
+                if t.text:
+                    para_text += t.text
+            para_text = para_text.strip()
+            
+            if not para_text:
+                continue
+            
+            # Проверяем, является ли это подписью рисунка
+            caption_match = figure_caption_pattern_full.match(para_text)
+            if caption_match:
+                caption_para = next_element
+                caption_para_idx = next_idx
+                
+                pPr = next_element.find(qn('w:pPr'))
+                
+                # Т-7: Проверяем выравнивание (должно быть center)
+                jc_el = pPr.find(qn('w:jc')) if pPr is not None else None
+                alignment = jc_el.get(qn('w:val')) if jc_el is not None else None
+                
+                if alignment != 'center':
+                    errors.append(ReportError(
+                        id=f"Т-7-align-{next_idx}",
+                        code="Т-7",
+                        type="formatting",
+                        severity="error",
+                        location=ErrorLocation(
+                            paragraph_index=next_idx,
+                            structural_path=f"Подпись рисунка {fig_idx + 1}"
+                        ),
+                        fragment=para_text[:100],
+                        rule="Подпись рисунка должна быть выровнена по центру",
+                        rule_citation="§4.4, с. 50-52",
+                        found_value=alignment or "не задано",
+                        expected_value="center",
+                        recommendation="Установите выравнивание по центру"
+                    ))
+                
+                # Т-8: Название рисунка с прописной
+                title_text = caption_match.group(2).strip()
+                if title_text and title_text[0].islower():
+                    errors.append(ReportError(
+                        id=f"Т-8-capital-{next_idx}",
+                        code="Т-8",
+                        type="formatting",
+                        severity="error",
+                        location=ErrorLocation(
+                            paragraph_index=next_idx,
+                            structural_path=f"Подпись рисунка {fig_idx + 1}"
+                        ),
+                        fragment=para_text[:100],
+                        rule="Название рисунка должно начинаться с прописной буквы",
+                        rule_citation="§4.4, с. 50-52",
+                        found_value=title_text[:20],
+                        expected_value="с заглавной буквы",
+                        recommendation="Начните название рисунка с прописной буквы"
+                    ))
+                
+                # Т-8: Точка после «Рис. N.» уже проверена паттерном (она должна быть)
+                # Проверяем, что в конце названия нет точки
+                if para_text.rstrip().endswith('.'):
+                    errors.append(ReportError(
+                        id=f"Т-8-dot-at-end-{next_idx}",
+                        code="Т-8",
+                        type="formatting",
+                        severity="error",
+                        location=ErrorLocation(
+                            paragraph_index=next_idx,
+                            structural_path=f"Подпись рисунка {fig_idx + 1}"
+                        ),
+                        fragment=para_text[:100],
+                        rule="В конце названия рисунка не должна ставиться точка",
+                        rule_citation="§4.4, с. 50-52",
+                        found_value=para_text[-20:] if len(para_text) > 20 else para_text,
+                        expected_value="без точки в конце",
+                        recommendation="Удалите точку в конце названия рисунка"
+                    ))
+                
+                # Т-10: Интервал в названиях рисунков — 1 (240 twips)
+                spacing_el = pPr.find(qn('w:spacing')) if pPr is not None else None
+                if spacing_el is not None:
+                    line_val = spacing_el.get(qn('w:line'))
+                    if line_val is not None:
+                        try:
+                            actual_spacing = int(line_val)
+                            expected_figure_spacing = 240  # 1.0 интервал
+                            if abs(actual_spacing - expected_figure_spacing) > 20:
+                                errors.append(ReportError(
+                                    id=f"Т-10-spacing-{next_idx}",
+                                    code="Т-10",
+                                    type="formatting",
+                                    severity="error",
+                                    location=ErrorLocation(
+                                        paragraph_index=next_idx,
+                                        structural_path=f"Подпись рисунка {fig_idx + 1}"
+                                    ),
+                                    fragment=para_text[:100],
+                                    rule="Интервал в названии рисунка должен быть 1.0 (240 twips)",
+                                    rule_citation="§4.4, с. 50-52",
+                                    found_value=str(actual_spacing),
+                                    expected_value=str(expected_figure_spacing),
+                                    recommendation="Установите межстрочный интервал 1.0"
+                                ))
+                        except ValueError:
+                            pass
+                
+                break
+            
+            # Если это не подпись, возможно это условные обозначения (Т-9)
+            # Проверяем, есть ли здесь текст с условными обозначениями
+            conditional_legend_para = (next_idx, next_element, para_text)
+        
+        # Т-9: Условные обозначения — между рисунком и подписью, 12 пт
+        if conditional_legend_para is not None:
+            legend_idx, legend_element, legend_text = conditional_legend_para
+            
+            # Проверяем размер шрифта (12 пт)
+            for t in legend_element.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}r'):
+                rPr = t.find(qn('w:rPr'))
+                font_size = None
+                if rPr is not None:
+                    sz_el = rPr.find(qn('w:sz'))
+                    if sz_el is not None:
+                        val = sz_el.get(qn('w:val'))
+                        if val is not None:
+                            try:
+                                font_size = int(val) / 2.0
+                            except ValueError:
+                                pass
+                
+                if font_size is not None and font_size != 12:
+                    errors.append(ReportError(
+                        id=f"Т-9-font-size-{legend_idx}",
+                        code="Т-9",
+                        type="formatting",
+                        severity="error",
+                        location=ErrorLocation(
+                            paragraph_index=legend_idx,
+                            structural_path=f"Условные обозначения рисунка {fig_idx + 1}"
+                        ),
+                        fragment=legend_text[:100],
+                        rule="Условные обозначения должны быть 12 пт",
+                        rule_citation="§4.4, с. 50-52",
+                        found_value=str(font_size),
+                        expected_value="12",
+                        recommendation="Установите размер шрифта 12 пт"
+                    ))
+                    break
+    
+    # Т-11: Данные не дублируются в таблице и рисунке
+    # Сравнить текст в таблице и подписи рисунка (простое предупреждение)
+    table_texts = set()
+    for table in tables_list:
+        for row in table.rows:
+            for cell in row.cells:
+                for para in cell.paragraphs:
+                    text = para.text.strip()
+                    if text:
+                        # Нормализуем текст для сравнения
+                        normalized = re.sub(r'\s+', ' ', text.lower())
+                        table_texts.add(normalized)
+    
+    # Сравниваем с текстами подписей рисунков
+    for para_idx, para in enumerate(doc.paragraphs):
+        text = para.text.strip()
+        if figure_caption_pattern_full.match(text):
+            # Извлекаем название (после «Рис. N.»)
+            match = figure_caption_pattern_full.match(text)
+            if match:
+                title = match.group(2).strip()
+                normalized_title = re.sub(r'\s+', ' ', title.lower())
+                
+                # Проверяем, есть ли совпадение с текстом из таблиц
+                for table_text in table_texts:
+                    if normalized_title in table_text or table_text in normalized_title:
+                        if len(normalized_title) > 10:  # Игнорируем короткие совпадения
+                            errors.append(ReportError(
+                                id=f"Т-11-duplicate-{para_idx}",
+                                code="Т-11",
+                                type="formatting",
+                                severity="warning",
+                                location=ErrorLocation(
+                                    paragraph_index=para_idx,
+                                    structural_path=f"Подпись рисунка"
+                                ),
+                                fragment=text[:100],
+                                rule="Данные не должны дублироваться в таблице и рисунке",
+                                rule_citation="§4.4, с. 50-52",
+                                found_value=title[:50],
+                                expected_value="уникальные данные",
+                                recommendation="Проверьте, не дублируются ли данные в таблице и рисунке"
+                            ))
+                            break
     
     return errors
 
