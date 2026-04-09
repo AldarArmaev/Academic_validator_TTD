@@ -510,14 +510,14 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
         
         style_name = para.style.name
         
-        # Определяем начало параграфа (Heading 2 или Heading 3)
-        if style_name in ("Heading 2", "Heading 3"):
+        # Определяем начало параграфа (Heading 2)
+        if style_name == "Heading 2":
             in_paragraph = True
             paragraph_start_idx = para_idx
             continue
         
-        # Если мы внутри параграфа и нашли заголовок уровня 4+ — это нарушение С-10
-        if in_paragraph and style_name in ("Heading 4", "Heading 5", "Heading 6"):
+        # Если мы внутри параграфа и нашли заголовок уровня 3+ — это нарушение С-10
+        if in_paragraph and style_name in ("Heading 3", "Heading 4", "Heading 5", "Heading 6"):
             title = para.text.strip()
             if title:  # Пропускаем пустые заголовки
                 errors.append(ReportError(
@@ -537,14 +537,10 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
                     recommendation="Удалите подзаголовок или оформите его как обычный текст"
                 ))
         
-        # Выходим из режима параграфа при встрече основного текста или другого заголовка верхнего уровня
+        # Выходим из режима параграфа только при встрече Heading 1 (новая глава) или Heading 2 (новый параграф)
         if in_paragraph:
-            # Если встретили Heading 1 (новая глава) или Normal/другой стиль с текстом - выходим из параграфа
-            if style_name == "Heading 1":
+            if style_name in ("Heading 1", "Heading 2"):
                 in_paragraph = False
-            elif style_name not in ("Heading 2", "Heading 3", "Heading 4", "Heading 5", "Heading 6"):
-                if para.text.strip():  # Если есть текст, считаем что параграф начался
-                    in_paragraph = False
     
     # С-2: Проверка приложений (если они есть)
     if has_appendix:

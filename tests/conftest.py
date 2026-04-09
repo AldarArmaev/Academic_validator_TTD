@@ -269,3 +269,137 @@ def wrong_L_12_hyphen_instead_of_dash_docx(tmp_path_factory):
     doc.add_heading("Заключение", level=1)
     doc.save(path)
     return path
+
+
+# ── Фикстуры для тестов структуры (С-*) ──────────────────────────────────────
+
+def add_page_break(doc):
+    """Добавляет разрыв страницы."""
+    p = doc.add_paragraph()
+    pPr = p._p.get_or_add_pPr()
+    pb = OxmlElement('w:pageBreakBefore')
+    pb.set(qn('w:val'), '1')
+    pPr.append(pb)
+
+
+@pytest.fixture(scope="session")
+def wrong_C_2_appendix_no_reference_docx(tmp_path_factory):
+    """Нарушение С-2: есть приложение, но нет ссылки на него в тексте."""
+    path = tmp_path_factory.mktemp("fix") / "wrong_C_2_appendix_no_ref.docx"
+    doc = make_base_doc()
+    doc.add_heading("Введение", level=1)
+    add_correct_paragraph(doc, "Основной текст без ссылок на приложения.")
+    
+    doc.add_heading("Глава 1. Теоретические основы", level=1)
+    add_correct_paragraph(doc, "Текст главы.")
+    
+    doc.add_heading("Заключение", level=1)
+    add_correct_paragraph(doc, "Выводы.")
+    
+    doc.add_heading("Список литературы", level=1)
+    
+    # Добавляем приложение без ссылки в тексте
+    doc.add_heading("Приложение А", level=1)
+    add_correct_paragraph(doc, "Дополнительные материалы.")
+    
+    doc.save(path)
+    return path
+
+
+@pytest.fixture(scope="session")
+def wrong_C_3_section_no_page_break_docx(tmp_path_factory):
+    """Нарушение С-3: раздел начинается без разрыва страницы."""
+    path = tmp_path_factory.mktemp("fix") / "wrong_C_3_no_page_break.docx"
+    doc = make_base_doc()
+    doc.add_heading("Введение", level=1)
+    add_correct_paragraph(doc, "Текст введения.")
+    
+    # Глава без разрыва страницы перед ней (нарушение С-3)
+    doc.add_heading("Глава 1. Теоретические основы", level=1)
+    add_correct_paragraph(doc, "Текст главы.")
+    
+    doc.add_heading("Заключение", level=1)
+    add_correct_paragraph(doc, "Выводы.")
+    
+    doc.add_heading("Список литературы", level=1)
+    
+    doc.save(path)
+    return path
+
+
+@pytest.fixture(scope="session")
+def wrong_C_4_paragraph_with_page_break_docx(tmp_path_factory):
+    """Нарушение С-4: параграф начинается с новой страницы."""
+    path = tmp_path_factory.mktemp("fix") / "wrong_C_4_para_page_break.docx"
+    doc = make_base_doc()
+    doc.add_heading("Введение", level=1)
+    add_correct_paragraph(doc, "Текст введения.")
+    
+    doc.add_heading("Глава 1. Теоретические основы", level=1)
+    add_correct_paragraph(doc, "Текст главы.")
+    
+    # Параграф с разрывом страницы (нарушение С-4)
+    # Добавляем pageBreakBefore непосредственно к заголовку параграфа
+    p = doc.add_heading("1.1. Первый параграф", level=2)
+    pPr = p._p.get_or_add_pPr()
+    pb = OxmlElement('w:pageBreakBefore')
+    pb.set(qn('w:val'), '1')
+    pPr.append(pb)
+    
+    add_correct_paragraph(doc, "Текст параграфа.")
+    
+    doc.add_heading("Заключение", level=1)
+    add_correct_paragraph(doc, "Выводы.")
+    
+    doc.add_heading("Список литературы", level=1)
+    
+    doc.save(path)
+    return path
+
+
+@pytest.fixture(scope="session")
+def wrong_C_6_paragraph_numbering_docx(tmp_path_factory):
+    """Нарушение С-6: неправильная нумерация параграфа."""
+    path = tmp_path_factory.mktemp("fix") / "wrong_C_6_numbering.docx"
+    doc = make_base_doc()
+    doc.add_heading("Введение", level=1)
+    add_correct_paragraph(doc, "Текст введения.")
+    
+    doc.add_heading("Глава 1. Теоретические основы", level=1)
+    
+    # Параграф без правильной нумерации (нарушение С-6)
+    doc.add_heading("Первый параграф", level=2)
+    add_correct_paragraph(doc, "Текст параграфа без нумерации.")
+    
+    doc.add_heading("Заключение", level=1)
+    add_correct_paragraph(doc, "Выводы.")
+    
+    doc.add_heading("Список литературы", level=1)
+    
+    doc.save(path)
+    return path
+
+
+@pytest.fixture(scope="session")
+def wrong_C_10_subheading_in_paragraph_docx(tmp_path_factory):
+    """Нарушение С-10: подзаголовок внутри параграфа."""
+    path = tmp_path_factory.mktemp("fix") / "wrong_C_10_subheading.docx"
+    doc = make_base_doc()
+    doc.add_heading("Введение", level=1)
+    add_correct_paragraph(doc, "Текст введения.")
+    
+    doc.add_heading("Глава 1. Теоретические основы", level=1)
+    doc.add_heading("1.1. Первый параграф", level=2)
+    add_correct_paragraph(doc, "Начало текста параграфа.")
+    
+    # Подзаголовок внутри параграфа (нарушение С-10)
+    doc.add_heading("1.1.1. Подраздел", level=3)
+    add_correct_paragraph(doc, "Текст подраздела.")
+    
+    doc.add_heading("Заключение", level=1)
+    add_correct_paragraph(doc, "Выводы.")
+    
+    doc.add_heading("Список литературы", level=1)
+    
+    doc.save(path)
+    return path
