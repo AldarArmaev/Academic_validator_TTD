@@ -85,6 +85,57 @@ FIXTURE_DESCRIPTIONS: dict[str, str] = {
         "Нарушение Л-7: список литературы содержит менее 40 источников. "
         "Добавьте 20-30 источников вместо требуемых 40+."
     ),
+    "references/wrong_L_4_alphabetical_order.docx": (
+        "Нарушение Л-4: источники в списке расположены не по алфавиту. "
+        "Например: Петров стоит перед Ивановым."
+    ),
+    "references/wrong_L_4_cyrillic_before_latin.docx": (
+        "Нарушение Л-4: иностранный источник (латиница) стоит перед русским. "
+        "Сначала должны идти все русскоязычные, затем иностранные."
+    ),
+    "references/wrong_L_5_numbering.docx": (
+        "Нарушение Л-5: нарушена сплошная нумерация (например 1, 3 вместо 1, 2, 3)."
+    ),
+    "references/wrong_L_8_old_sources.docx": (
+        "Нарушение Л-8: большинство источников старше 10 лет (до 2014 года)."
+    ),
+    "references/wrong_L_9_author_format.docx": (
+        "Нарушение Л-9: автор оформлен без запятой — 'Иванов И.И.' вместо 'Иванов, И. И.'"
+    ),
+    "references/wrong_L_10_url_no_date.docx": (
+        "Нарушение Л-10: URL-источник без даты обращения. "
+        "Добавить: (дата обращения: ДД.ММ.ГГГГ)"
+    ),
+    "references/wrong_L_11_invalid_reference.docx": (
+        "Нарушение Л-11: в тексте есть ссылка [99] на источник которого нет в списке."
+    ),
+    "references/wrong_L_12_hyphen_instead_of_dash.docx": (
+        "Нарушение Л-12: в библиографии используется дефис '-' вместо тире '–'."
+    ),
+    "references/wrong_L_2_repeated_ref_format.docx": (
+        "Нарушение Л-2: повторная ссылка оформлена неправильно. "
+        "Должна быть вида [там же, с. X] или [там же]."
+    ),
+    "toc/wrong_So_1_toc_missing_headings.docx": (
+        "Нарушение Со-1: содержание не отражает все заголовки. "
+        "Некоторые разделы отсутствуют в оглавлении или номера страниц неверны."
+    ),
+    "appendix/wrong_P_1_appendix_no_new_page.docx": (
+        "Нарушение П-1: приложение не начинается с новой страницы. "
+        "Каждое приложение должно начинаться с разрыва страницы."
+    ),
+    "appendix/wrong_P_2_appendix_label_position.docx": (
+        "Нарушение П-2: надпись 'Приложение N' расположена не в правом верхнем углу. "
+        "Должна быть выровнена по правому краю."
+    ),
+    "appendix/wrong_P_3_appendix_title_format.docx": (
+        "Нарушение П-3: название приложения оформлено неправильно. "
+        "Должно быть по центру, без точки в конце."
+    ),
+    "appendix/wrong_P_4_appendix_numbering_order.docx": (
+        "Нарушение П-4: нумерация приложений не соответствует порядку ссылок в тексте. "
+        "Приложения нумеруются арабскими цифрами в порядке упоминания."
+    ),
     "typography/wrong_N_2_initials_space.docx": (
         "Нарушение Н-2: инициалы и фамилия написаны без пробелов: 'И.И.Иванов' "
         "вместо правильного 'И. И. Иванов' (пробелы между инициалами и фамилией)."
@@ -123,25 +174,59 @@ def _get_fixtures_structure() -> dict[str, list[str]]:
         ],
         "structure": [
             "wrong_C_1_missing_conclusion.docx",
+            "wrong_C_2_appendix_no_reference.docx",
+            "wrong_C_3_section_no_page_break.docx",
+            "wrong_C_4_paragraph_with_page_break.docx",
             "wrong_C_5_chapter_name.docx",
+            "wrong_C_6_paragraph_numbering.docx",
             "wrong_C_7_bold_heading.docx",
             "wrong_C_8_heading_alignment.docx",
             "wrong_C_9_heading_period.docx",
+            "wrong_C_10_subheading_in_paragraph.docx",
         ],
         "tables": [
             "wrong_T_1_caption_position.docx",
+            "wrong_T_2_title_alignment.docx",
+            "wrong_T_3_title_dot.docx",
             "wrong_T_4_font_size.docx",
+            "wrong_T_5_width_alignment.docx",
+            "wrong_T_6_numbering.docx",
+            "wrong_T_11_duplicate.docx",
             "wrong_T_12_decimal_point.docx",
+        ],
+        "figures": [
+            "wrong_T_7_caption_alignment.docx",
+            "wrong_T_8_title_capitalization.docx",
+            "wrong_T_9_legend_font.docx",
+            "wrong_T_10_spacing.docx",
         ],
         "references": [
             "wrong_L_1_bracket_format.docx",
+            "wrong_L_2_repeated_ref_format.docx",
             "wrong_L_3_multiple_order.docx",
+            "wrong_L_4_alphabetical_order.docx",
+            "wrong_L_4_cyrillic_before_latin.docx",
+            "wrong_L_5_numbering.docx",
             "wrong_L_7_min_sources.docx",
+            "wrong_L_8_old_sources.docx",
+            "wrong_L_9_author_format.docx",
+            "wrong_L_10_url_no_date.docx",
+            "wrong_L_11_invalid_reference.docx",
+            "wrong_L_12_hyphen_instead_of_dash.docx",
         ],
         "typography": [
             "wrong_N_2_initials_space.docx",
             "wrong_N_4_quotes.docx",
             "wrong_N_6_abbreviation.docx",
+        ],
+        "toc": [
+            "wrong_So_1_toc_missing_headings.docx",
+        ],
+        "appendix": [
+            "wrong_P_1_appendix_no_new_page.docx",
+            "wrong_P_2_appendix_label_position.docx",
+            "wrong_P_3_appendix_title_format.docx",
+            "wrong_P_4_appendix_numbering_order.docx",
         ],
     }
 

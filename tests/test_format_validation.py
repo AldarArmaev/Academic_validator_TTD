@@ -257,20 +257,22 @@ def test_T_1_caption_position_error(rules):
 
 def test_T_2_table_title_alignment_error(rules):
     """Т-2: название таблицы не по центру"""
-    docx_path = FIXTURES_DIR / "tables" / "wrong_T_2_title_alignment.docx"
-    if docx_path.exists():
-        report = validate_format(str(docx_path), rules)
-        errors = [e for e in report.errors if e.code == "Т-2"]
-        assert len(errors) >= 1, "Ошибка Т-2 не обнаружена"
+    docx_path = FIXTURES_DIR / "tables" / "wrong_T_2_table_title_alignment.docx"
+    assert docx_path.exists(), f"Файл не найден: {docx_path}"
+    
+    report = validate_format(str(docx_path), rules)
+    errors = [e for e in report.errors if e.code == "Т-2"]
+    assert len(errors) >= 1, "Ошибка Т-2 не обнаружена"
 
 
 def test_T_3_table_title_dot_error(rules):
     """Т-3: точка в названии таблицы"""
-    docx_path = FIXTURES_DIR / "tables" / "wrong_T_3_title_dot.docx"
-    if docx_path.exists():
-        report = validate_format(str(docx_path), rules)
-        errors = [e for e in report.errors if e.code == "Т-3"]
-        assert len(errors) >= 1, "Ошибка Т-3 не обнаружена"
+    docx_path = FIXTURES_DIR / "tables" / "wrong_T_3_table_title_dot.docx"
+    assert docx_path.exists(), f"Файл не найден: {docx_path}"
+    
+    report = validate_format(str(docx_path), rules)
+    errors = [e for e in report.errors if e.code == "Т-3"]
+    assert len(errors) >= 1, "Ошибка Т-3 не обнаружена"
 
 
 def test_T_4_font_size_error(rules):
@@ -285,66 +287,73 @@ def test_T_4_font_size_error(rules):
 
 def test_T_5_table_width_alignment_error(rules):
     """Т-5: неправильная ширина или выравнивание в таблице"""
-    docx_path = FIXTURES_DIR / "tables" / "wrong_T_5_width_alignment.docx"
-    if docx_path.exists():
-        report = validate_format(str(docx_path), rules)
-        errors = [e for e in report.errors if e.code == "Т-5"]
-        assert len(errors) >= 1, "Ошибка Т-5 не обнаружена"
+    docx_path = FIXTURES_DIR / "tables" / "wrong_T_5_table_width_alignment.docx"
+    assert docx_path.exists(), f"Файл не найден: {docx_path}"
+    
+    report = validate_format(str(docx_path), rules)
+    errors = [e for e in report.errors if e.code == "Т-5"]
+    assert len(errors) >= 1, "Ошибка Т-5 не обнаружена"
 
 
 def test_T_6_numbering_gap_error(rules):
     """Т-6: пропуск в нумерации таблиц или рисунков"""
-    docx_path = FIXTURES_DIR / "tables" / "wrong_T_6_numbering.docx"
-    if docx_path.exists():
-        report = validate_format(str(docx_path), rules)
-        errors = [e for e in report.errors if e.code == "Т-6"]
-        assert len(errors) >= 1, "Ошибка Т-6 не обнаружена"
+    docx_path = FIXTURES_DIR / "tables" / "wrong_T_6_numbering_gap.docx"
+    assert docx_path.exists(), f"Файл не найден: {docx_path}"
+    
+    report = validate_format(str(docx_path), rules)
+    errors = [e for e in report.errors if e.code == "Т-6"]
+    assert len(errors) >= 1, "Ошибка Т-6 не обнаружена"
 
 
 def test_T_7_figure_caption_alignment_error(rules):
     """Т-7: подпись рисунка не по центру"""
-    docx_path = FIXTURES_DIR / "figures" / "wrong_T_7_caption_alignment.docx"
-    if docx_path.exists():
-        report = validate_format(str(docx_path), rules)
-        errors = [e for e in report.errors if e.code == "Т-7"]
-        assert len(errors) >= 1, "Ошибка Т-7 не обнаружена"
+    docx_path = FIXTURES_DIR / "tables" / "wrong_T_7_figure_caption_alignment.docx"
+    assert docx_path.exists(), f"Файл не найден: {docx_path}"
+    
+    report = validate_format(str(docx_path), rules)
+    errors = [e for e in report.errors if e.code == "Т-7"]
+    assert len(errors) >= 1, "Ошибка Т-7 не обнаружена"
 
 
 def test_T_8_figure_title_capitalization_error(rules):
     """Т-8: название рисунка с маленькой буквы или точка в конце"""
-    docx_path = FIXTURES_DIR / "figures" / "wrong_T_8_title_capitalization.docx"
-    if docx_path.exists():
-        report = validate_format(str(docx_path), rules)
-        errors = [e for e in report.errors if e.code == "Т-8"]
-        assert len(errors) >= 1, "Ошибка Т-8 не обнаружена"
+    docx_path = FIXTURES_DIR / "tables" / "wrong_T_8_figure_title_capitalization.docx"
+    assert docx_path.exists(), f"Файл не найден: {docx_path}"
+    
+    report = validate_format(str(docx_path), rules)
+    errors = [e for e in report.errors if e.code == "Т-8"]
+    assert len(errors) >= 1, "Ошибка Т-8 не обнаружена"
 
 
 def test_T_9_conditional_legend_font_error(rules):
     """Т-9: неправильный размер шрифта условных обозначений"""
-    docx_path = FIXTURES_DIR / "figures" / "wrong_T_9_legend_font.docx"
-    if docx_path.exists():
-        report = validate_format(str(docx_path), rules)
-        errors = [e for e in report.errors if e.code == "Т-9"]
-        assert len(errors) >= 1, "Ошибка Т-9 не обнаружена"
+    docx_path = FIXTURES_DIR / "tables" / "wrong_T_9_conditional_legend_font.docx"
+    assert docx_path.exists(), f"Файл не найден: {docx_path}"
+    
+    report = validate_format(str(docx_path), rules)
+    errors = [e for e in report.errors if e.code == "Т-9"]
+    assert len(errors) >= 1, "Ошибка Т-9 не обнаружена"
 
 
 def test_T_10_figure_spacing_error(rules):
     """Т-10: неправильный интервал в подписи рисунка"""
-    docx_path = FIXTURES_DIR / "figures" / "wrong_T_10_spacing.docx"
-    if docx_path.exists():
-        report = validate_format(str(docx_path), rules)
-        errors = [e for e in report.errors if e.code == "Т-10"]
-        assert len(errors) >= 1, "Ошибка Т-10 не обнаружена"
+    docx_path = FIXTURES_DIR / "tables" / "wrong_T_10_figure_spacing.docx"
+    assert docx_path.exists(), f"Файл не найден: {docx_path}"
+    
+    report = validate_format(str(docx_path), rules)
+    errors = [e for e in report.errors if e.code == "Т-10"]
+    assert len(errors) >= 1, "Ошибка Т-10 не обнаружена"
 
 
 def test_T_11_data_duplicate_warning(rules):
     """Т-11: дублирование данных в таблице и рисунке (предупреждение)"""
-    docx_path = FIXTURES_DIR / "tables" / "wrong_T_11_duplicate.docx"
-    if docx_path.exists():
-        report = validate_format(str(docx_path), rules)
-        errors = [e for e in report.errors if e.code == "Т-11"]
-        # Т-11 это warning, проверяем что он есть
-        assert len(errors) >= 1, "Предупреждение Т-11 не обнаружено"
+    docx_path = FIXTURES_DIR / "tables" / "wrong_T_11_data_duplicate.docx"
+    assert docx_path.exists(), f"Файл не найден: {docx_path}"
+    
+    report = validate_format(str(docx_path), rules)
+    errors = [e for e in report.errors if e.code == "Т-11"]
+    # Т-11 это warning, проверяем что он есть
+    assert len(errors) >= 1, "Предупреждение Т-11 не обнаружено"
 
 
 def test_T_12_decimal_point_error(rules):
@@ -484,3 +493,57 @@ def test_L_12_hyphen_instead_of_dash_error(rules, wrong_L_12_hyphen_instead_of_d
     report = validate_format(str(wrong_L_12_hyphen_instead_of_dash_docx), rules)
     errors = [e for e in report.errors if e.code == "Л-12"]
     assert len(errors) >= 1, "Ошибка Л-12 не обнаружена"
+
+
+# =============================================================================
+# Тесты содержания (Со-*)
+# =============================================================================
+
+def test_So_1_toc_contains_all_headings_error(rules, wrong_So_1_toc_missing_headings_docx):
+    """Со-1: содержание не отражает все заголовки с номерами страниц."""
+    report = validate_format(str(wrong_So_1_toc_missing_headings_docx), rules)
+    errors = [e for e in report.errors if e.code == "Со-1"]
+    assert len(errors) >= 1, "Ошибка Со-1 не обнаружена"
+
+
+# =============================================================================
+# Тесты приложений (П-*)
+# =============================================================================
+
+def test_P_1_appendix_new_page_error(rules, wrong_P_1_appendix_no_new_page_docx):
+    """П-1: приложение не начинается с новой страницы."""
+    report = validate_format(str(wrong_P_1_appendix_no_new_page_docx), rules)
+    errors = [e for e in report.errors if e.code == "П-1"]
+    assert len(errors) >= 1, "Ошибка П-1 не обнаружена"
+
+
+def test_P_2_appendix_label_right_top_error(rules, wrong_P_2_appendix_label_position_docx):
+    """П-2: надпись 'Приложение N' не в правом верхнем углу."""
+    report = validate_format(str(wrong_P_2_appendix_label_position_docx), rules)
+    errors = [e for e in report.errors if e.code == "П-2"]
+    assert len(errors) >= 1, "Ошибка П-2 не обнаружена"
+
+
+def test_P_3_appendix_title_centered_no_period_error(rules, wrong_P_3_appendix_title_format_docx):
+    """П-3: название приложения не по центру или с точкой."""
+    report = validate_format(str(wrong_P_3_appendix_title_format_docx), rules)
+    errors = [e for e in report.errors if e.code == "П-3"]
+    assert len(errors) >= 1, "Ошибка П-3 не обнаружена"
+
+
+def test_P_4_appendix_numbering_order_error(rules, wrong_P_4_appendix_numbering_order_docx):
+    """П-4: нумерация приложений не в порядке ссылок."""
+    report = validate_format(str(wrong_P_4_appendix_numbering_order_docx), rules)
+    errors = [e for e in report.errors if e.code == "П-4"]
+    assert len(errors) >= 1, "Ошибка П-4 не обнаружена"
+
+
+# =============================================================================
+# Тесты повторных ссылок (Л-2)
+# =============================================================================
+
+def test_L_2_repeated_ref_format_error(rules, wrong_L_2_repeated_ref_format_docx):
+    """Л-2: повторная ссылка оформлена неправильно (должна быть [там же, с. X])."""
+    report = validate_format(str(wrong_L_2_repeated_ref_format_docx), rules)
+    errors = [e for e in report.errors if e.code == "Л-2"]
+    assert len(errors) >= 1, "Ошибка Л-2 не обнаружена"

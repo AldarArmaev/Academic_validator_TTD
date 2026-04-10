@@ -125,9 +125,63 @@ def wrong_caption_position_docx():
 
 
 @pytest.fixture
+def wrong_table_title_alignment_docx():
+    """Название таблицы не по центру (нарушение Т-2)."""
+    return FIXTURES_DIR / "tables" / "wrong_T_2_table_title_alignment.docx"
+
+
+@pytest.fixture
+def wrong_table_title_dot_docx():
+    """Название таблицы с точкой в конце (нарушение Т-3)."""
+    return FIXTURES_DIR / "tables" / "wrong_T_3_table_title_dot.docx"
+
+
+@pytest.fixture
 def wrong_table_font_size_docx():
     """Размер шрифта в таблице меньше 14 пт (нарушение Т-4)."""
     return FIXTURES_DIR / "tables" / "wrong_T_4_font_size.docx"
+
+
+@pytest.fixture
+def wrong_table_width_alignment_docx():
+    """Таблица не выровнена по ширине страницы (нарушение Т-5)."""
+    return FIXTURES_DIR / "tables" / "wrong_T_5_table_width_alignment.docx"
+
+
+@pytest.fixture
+def wrong_table_numbering_gap_docx():
+    """Пропуск в нумерации таблиц (нарушение Т-6)."""
+    return FIXTURES_DIR / "tables" / "wrong_T_6_numbering_gap.docx"
+
+
+@pytest.fixture
+def wrong_figure_caption_alignment_docx():
+    """Подпись рисунка не по центру (нарушение Т-7)."""
+    return FIXTURES_DIR / "tables" / "wrong_T_7_figure_caption_alignment.docx"
+
+
+@pytest.fixture
+def wrong_figure_title_capitalization_docx():
+    """Название рисунка с неправильной капитализацией (нарушение Т-8)."""
+    return FIXTURES_DIR / "tables" / "wrong_T_8_figure_title_capitalization.docx"
+
+
+@pytest.fixture
+def wrong_conditional_legend_font_docx():
+    """Шрифт в условных обозначениях меньше 14 пт (нарушение Т-9)."""
+    return FIXTURES_DIR / "tables" / "wrong_T_9_conditional_legend_font.docx"
+
+
+@pytest.fixture
+def wrong_figure_spacing_docx():
+    """Неправильные отступы у рисунков (нарушение Т-10)."""
+    return FIXTURES_DIR / "tables" / "wrong_T_10_figure_spacing.docx"
+
+
+@pytest.fixture
+def wrong_data_duplicate_docx():
+    """Дублирование данных в таблице (нарушение Т-11)."""
+    return FIXTURES_DIR / "tables" / "wrong_T_11_data_duplicate.docx"
 
 
 @pytest.fixture
@@ -174,3 +228,87 @@ def wrong_quotes_docx():
 def wrong_abbreviation_docx():
     """Сокращения оформлены неправильно (нарушение Н-6)."""
     return FIXTURES_DIR / "typography" / "wrong_N_6_abbreviation.docx"
+
+
+# ── Дополнительные фикстуры для списка литературы (Л-*) ───────────────────────
+
+@pytest.fixture
+def wrong_L_4_alphabetical_order_docx():
+    return FIXTURES_DIR / "references" / "wrong_L_4_alphabetical_order.docx"
+
+
+@pytest.fixture
+def wrong_L_4_cyrillic_before_latin_docx():
+    return FIXTURES_DIR / "references" / "wrong_L_4_cyrillic_before_latin.docx"
+
+
+@pytest.fixture
+def wrong_L_5_numbering_docx():
+    return FIXTURES_DIR / "references" / "wrong_L_5_numbering.docx"
+
+
+@pytest.fixture
+def wrong_L_8_old_sources_docx():
+    return FIXTURES_DIR / "references" / "wrong_L_8_old_sources.docx"
+
+
+@pytest.fixture
+def wrong_L_9_author_format_docx():
+    return FIXTURES_DIR / "references" / "wrong_L_9_author_format.docx"
+
+
+@pytest.fixture
+def wrong_L_10_url_no_date_docx():
+    return FIXTURES_DIR / "references" / "wrong_L_10_url_no_date.docx"
+
+
+@pytest.fixture
+def wrong_L_11_invalid_reference_docx():
+    return FIXTURES_DIR / "references" / "wrong_L_11_invalid_reference.docx"
+
+
+@pytest.fixture
+def wrong_L_12_hyphen_instead_of_dash_docx():
+    return FIXTURES_DIR / "references" / "wrong_L_12_hyphen_instead_of_dash.docx"
+
+
+# ── Фикстуры для тестов содержания (Со-*) ─────────────────────────────────────
+
+@pytest.fixture
+def wrong_So_1_toc_missing_headings_docx():
+    """Нарушение Со-1: в содержании отсутствуют некоторые заголовки."""
+    return FIXTURES_DIR / "toc" / "wrong_So_1_toc_missing_headings.docx"
+
+
+# ── Фикстуры для тестов приложений (П-*) ──────────────────────────────────────
+
+@pytest.fixture
+def wrong_P_1_appendix_no_new_page_docx():
+    """Нарушение П-1: приложение не начинается с новой страницы."""
+    return FIXTURES_DIR / "appendix" / "wrong_P_1_appendix_no_new_page.docx"
+
+
+@pytest.fixture
+def wrong_P_2_appendix_label_position_docx():
+    """Нарушение П-2: надпись 'Приложение N' не в правом верхнем углу."""
+    return FIXTURES_DIR / "appendix" / "wrong_P_2_appendix_label_position.docx"
+
+
+@pytest.fixture
+def wrong_P_3_appendix_title_format_docx():
+    """Нарушение П-3: название приложения не по центру или с точкой."""
+    return FIXTURES_DIR / "appendix" / "wrong_P_3_appendix_title_format.docx"
+
+
+@pytest.fixture
+def wrong_P_4_appendix_numbering_order_docx():
+    """Нарушение П-4: нумерация приложений не в порядке ссылок."""
+    return FIXTURES_DIR / "appendix" / "wrong_P_4_appendix_numbering_order.docx"
+
+
+# ── Дополнительные фикстуры для ссылок (Л-*) ──────────────────────────────────
+
+@pytest.fixture
+def wrong_L_2_repeated_ref_format_docx():
+    """Нарушение Л-2: повторная ссылка оформлена неправильно."""
+    return FIXTURES_DIR / "references" / "wrong_L_2_repeated_ref_format.docx"

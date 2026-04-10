@@ -531,26 +531,28 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
             ))
     
     # С-10: Проверка отсутствия подзаголовков внутри параграфов
-    # Ищем heading стили между заголовками параграфов
-    in_paragraph = False
-    paragraph_start_idx = None
+    # Нарушение: если внутри раздела (между Heading 1) есть Heading 2 без правильной нумерации вида N.N
+    # или если есть Heading 3+ внутри Heading 2
+    in_chapter = False
+    chapter_start_idx = None
     
     for para_idx, para in enumerate(doc.paragraphs):
         if not para.style:
             continue
         
         style_name = para.style.name
+        title = para.text.strip()
         
-        # Определяем начало параграфа (Heading 2)
-        if style_name == "Heading 2":
-            in_paragraph = True
-            paragraph_start_idx = para_idx
+        # Определяем начало главы (Heading 1)
+        if style_name == "Heading 1":
+            in_chapter = True
+            chapter_start_idx = para_idx
             continue
         
-        # Если мы внутри параграфа и нашли заголовок уровня 3+ — это нарушение С-10
-        if in_paragraph and style_name in ("Heading 3", "Heading 4", "Heading 5", "Heading 6"):
-            title = para.text.strip()
-            if title:  # Пропускаем пустые заголовки
+        # Если мы внутри главы и нашли Heading 2 без правильной нумерации — это нарушение С-10
+        if in_chapter and style_name == "Heading 2":
+            # Проверяем, есть ли нумерация вида N.N
+            if not re.match(r'^\d+\.\d+', title):
                 errors.append(ReportError(
                     id=f"С-10-{para_idx}",
                     code="С-10",
@@ -558,7 +560,27 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
                     severity="error",
                     location=ErrorLocation(
                         paragraph_index=para_idx,
-                        structural_path=f"Подзаголовок внутри параграфа {paragraph_start_idx}"
+                        structural_path=f"Подзаголовок внутри главы {chapter_start_idx}"
+                    ),
+                    fragment=title[:100],
+                    rule="Внутри параграфов не должно быть подзаголовков без правильной нумерации",
+                    rule_citation="§4.2, с. 47",
+                    found_value=title[:100],
+                    expected_value="нумерация вида N.N или обычный текст",
+                    recommendation="Удалите подзаголовок или добавьте правильную нумерацию"
+                ))
+        
+        # Если мы внутри параграфа (Heading 2) и нашли заголовок уровня 3+ — это нарушение С-10
+        if in_chapter and style_name in ("Heading 3", "Heading 4", "Heading 5", "Heading 6"):
+            if title:  # Пропускаем пустые заголовки
+                errors.append(ReportError(
+                    id=f"С-10-sub-{para_idx}",
+                    code="С-10",
+                    type="formatting",
+                    severity="error",
+                    location=ErrorLocation(
+                        paragraph_index=para_idx,
+                        structural_path=f"Подзаголовок внутри главы {chapter_start_idx}"
                     ),
                     fragment=title[:100],
                     rule="Внутри параграфов не должно быть подзаголовков",
@@ -568,10 +590,9 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
                     recommendation="Удалите подзаголовок или оформите его как обычный текст"
                 ))
         
-        # Выходим из режима параграфа только при встрече Heading 1 (новая глава) или Heading 2 (новый параграф)
-        if in_paragraph:
-            if style_name in ("Heading 1", "Heading 2"):
-                in_paragraph = False
+        # Выходим из режима главы при встрече новой Heading 1
+        if style_name == "Heading 1":
+            in_chapter = False
     
     # С-2: Проверка приложений (если они есть)
     if has_appendix:
@@ -1217,12 +1238,12 @@ def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
     # =============================================================================
     
     # Собираем информацию о рисунках в потоке элементов
-    # Ищем w:drawing внутри параграфов
+    # Ищем w:drawing внутри параграфов (используем iter для поиска во всех descendant элементах)
     figure_elements = []  # (para_index, element)
     
     for para_idx, para in enumerate(doc.paragraphs):
-        drawing = para._p.find(qn('w:drawing'))
-        if drawing is not None:
+        drawings = list(para._p.iter(qn('w:drawing')))
+        if drawings:
             figure_elements.append((para_idx, para._p))
     
     # Т-7: Подпись рисунка: «Рис. N. Название» — под рисунком, по центру
@@ -1313,8 +1334,27 @@ def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
                         recommendation="Начните название рисунка с прописной буквы"
                     ))
                 
-                # Т-8: Точка после «Рис. N.» уже проверена паттерном (она должна быть)
-                # Проверяем, что в конце названия нет точки
+                # Т-8: Проверяем наличие точки после слова "Рис" (должна быть)
+                # Паттерн допускает отсутствие точки, но по стандарту она должна быть
+                if not para_text.startswith('Рис.'):
+                    errors.append(ReportError(
+                        id=f"Т-8-dot-after-ris-{next_idx}",
+                        code="Т-8",
+                        type="formatting",
+                        severity="error",
+                        location=ErrorLocation(
+                            paragraph_index=next_idx,
+                            structural_path=f"Подпись рисунка {fig_idx + 1}"
+                        ),
+                        fragment=para_text[:100],
+                        rule="После слова «Рис» должна стоять точка",
+                        rule_citation="§4.4, с. 50-52",
+                        found_value=para_text[:10],
+                        expected_value="Рис.",
+                        recommendation="Добавьте точку после слова «Рис»"
+                    ))
+                
+                # Т-8: Проверяем, что в конце названия нет точки
                 if para_text.rstrip().endswith('.'):
                     errors.append(ReportError(
                         id=f"Т-8-dot-at-end-{next_idx}",
@@ -1334,32 +1374,44 @@ def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
                     ))
                 
                 # Т-10: Интервал в названиях рисунков — 1 (240 twips)
+                # Проверяем явный w:spacing в параграфе или наследуемый из стиля
                 spacing_el = pPr.find(qn('w:spacing')) if pPr is not None else None
+                actual_spacing = None
+                
                 if spacing_el is not None:
                     line_val = spacing_el.get(qn('w:line'))
                     if line_val is not None:
                         try:
                             actual_spacing = int(line_val)
-                            expected_figure_spacing = 240  # 1.0 интервал
-                            if abs(actual_spacing - expected_figure_spacing) > 20:
-                                errors.append(ReportError(
-                                    id=f"Т-10-spacing-{next_idx}",
-                                    code="Т-10",
-                                    type="formatting",
-                                    severity="error",
-                                    location=ErrorLocation(
-                                        paragraph_index=next_idx,
-                                        structural_path=f"Подпись рисунка {fig_idx + 1}"
-                                    ),
-                                    fragment=para_text[:100],
-                                    rule="Интервал в названии рисунка должен быть 1.0 (240 twips)",
-                                    rule_citation="§4.4, с. 50-52",
-                                    found_value=str(actual_spacing),
-                                    expected_value=str(expected_figure_spacing),
-                                    recommendation="Установите межстрочный интервал 1.0"
-                                ))
                         except ValueError:
                             pass
+                else:
+                    # Если нет явного spacing, проверяем стиль параграфа
+                    if para.style and para.style.paragraph_format:
+                        fmt = para.style.paragraph_format
+                        if fmt.line_spacing is not None:
+                            # Конвертируем в twips (1 pt = 20 twips)
+                            actual_spacing = int(fmt.line_spacing * 20)
+                
+                if actual_spacing is not None:
+                    expected_figure_spacing = 240  # 1.0 интервал
+                    if abs(actual_spacing - expected_figure_spacing) > 20:
+                        errors.append(ReportError(
+                            id=f"Т-10-spacing-{next_idx}",
+                            code="Т-10",
+                            type="formatting",
+                            severity="error",
+                            location=ErrorLocation(
+                                paragraph_index=next_idx,
+                                structural_path=f"Подпись рисунка {fig_idx + 1}"
+                            ),
+                            fragment=para_text[:100],
+                            rule="Интервал в названии рисунка должен быть 1.0 (240 twips)",
+                            rule_citation="§4.4, с. 50-52",
+                            found_value=str(actual_spacing),
+                            expected_value=str(expected_figure_spacing),
+                            recommendation="Установите межстрочный интервал 1.0"
+                        ))
                 
                 break
             
@@ -1372,18 +1424,34 @@ def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
             legend_idx, legend_element, legend_text = conditional_legend_para
             
             # Проверяем размер шрифта (12 пт)
-            for t in legend_element.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}r'):
+            # Ищем w:sz или w:szCs (для комплексного шрифта)
+            font_size_found = False
+            for t in legend_element.iter(qn('w:r')):
                 rPr = t.find(qn('w:rPr'))
                 font_size = None
                 if rPr is not None:
+                    # Проверяем w:sz
                     sz_el = rPr.find(qn('w:sz'))
                     if sz_el is not None:
                         val = sz_el.get(qn('w:val'))
                         if val is not None:
                             try:
                                 font_size = int(val) / 2.0
+                                font_size_found = True
                             except ValueError:
                                 pass
+                    
+                    # Если w:sz не найден, проверяем w:szCs
+                    if font_size is None:
+                        szcs_el = rPr.find(qn('w:szCs'))
+                        if szcs_el is not None:
+                            val = szcs_el.get(qn('w:val'))
+                            if val is not None:
+                                try:
+                                    font_size = int(val) / 2.0
+                                    font_size_found = True
+                                except ValueError:
+                                    pass
                 
                 if font_size is not None and font_size != 12:
                     errors.append(ReportError(
@@ -1403,6 +1471,25 @@ def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
                         recommendation="Установите размер шрифта 12 пт"
                     ))
                     break
+            
+            # Если размер шрифта не найден ни в одном элементе, это тоже ошибка
+            if not font_size_found:
+                errors.append(ReportError(
+                    id=f"Т-9-font-size-missing-{legend_idx}",
+                    code="Т-9",
+                    type="formatting",
+                    severity="error",
+                    location=ErrorLocation(
+                        paragraph_index=legend_idx,
+                        structural_path=f"Условные обозначения рисунка {fig_idx + 1}"
+                    ),
+                    fragment=legend_text[:100],
+                    rule="Условные обозначения должны быть 12 пт",
+                    rule_citation="§4.4, с. 50-52",
+                    found_value="размер шрифта не задан",
+                    expected_value="12",
+                    recommendation="Установите размер шрифта 12 пт"
+                ))
     
     # Т-11: Данные не дублируются в таблице и рисунке
     # Сравнить текст в таблице и подписи рисунка (простое предупреждение)
@@ -1507,13 +1594,34 @@ def validate_references_format(doc: Document, rules: dict[str, Any]) -> list[Rep
     # Л-5: проверка сплошной нумерации (1, 2, 3, ...)
     numbering_pattern = re.compile(r'^(\d+)\.')
     source_numbers = []
+    has_numbering = False
+    
     for idx, para_text in enumerate(ref_section_paragraphs):
         match = numbering_pattern.match(para_text)
         if match:
             source_numbers.append(int(match.group(1)))
+            has_numbering = True
     
-    # Проверка непрерывности нумерации
-    if source_numbers:
+    # Если нумерации нет вообще - это ошибка
+    if not has_numbering and len(ref_section_paragraphs) > 0:
+        errors.append(ReportError(
+            id="Л-5-no-numbering",
+            code="Л-5",
+            type="formatting",
+            severity="error",
+            location=ErrorLocation(
+                paragraph_index=ref_section_start_idx,
+                structural_path="Список литературы"
+            ),
+            fragment=ref_section_paragraphs[0][:100] if ref_section_paragraphs else "Список литературы",
+            rule="Источники в списке литературы должны иметь сквозную нумерацию: 1, 2, 3, ...",
+            rule_citation="§4.5, с. 52",
+            found_value="нумерация отсутствует",
+            expected_value="1, 2, 3, ...",
+            recommendation="Добавьте нумерацию к каждому источнику"
+        ))
+    elif source_numbers:
+        # Проверка непрерывности нумерации
         expected_numbers = list(range(1, len(source_numbers) + 1))
         for i, (actual, expected) in enumerate(zip(source_numbers, expected_numbers)):
             if actual != expected:
@@ -1620,20 +1728,29 @@ def validate_references_format(doc: Document, rules: dict[str, Any]) -> list[Rep
             ))
     
     # Л-9: проверка формата автора "Фамилия, И. О."
-    # Русский паттерн: Фамилия, И. О.
-    ru_author_pattern = re.compile(r'^\d+\.\s*[А-ЯЁ][а-яё]+(?:-[А-ЯЁ][а-яё]+)?,\s[А-ЯЁ]\.\s[А-ЯЁ]\.')
-    # Английский паттерн: Surname, I. I.
-    en_author_pattern = re.compile(r'^\d+\.\s*[A-Z][a-z]+(?:-[A-Z][a-z]+)?,\s[A-Z]\.\s[A-Z]\.')
+    # Паттерны для проверки правильного формата автора (только с запятой)
+    author_patterns = [
+        r'[А-ЯЁ][а-яё]+\s*,\s*[А-ЯЁ]\.\s*[А-ЯЁ]\.',  # Иванов, И. И.
+        r'[A-Z][a-z]+\s*,\s*[A-Z]\.\s*[A-Z]\.',     # Ivanov, I. I.
+    ]
+    
+    # Паттерн для определения, начинается ли запись с автора (фамилии)
+    # Автор начинается с заглавной буквы, за которой следуют минимум 2 строчные буквы (фамилия),
+    # затем опционально запятая, пробел и инициал (заглавная буква с точкой)
+    # Это исключает записи типа "Режим доступа", где после слова не идет инициал
+    author_start_pattern = re.compile(r'^(\d+\.\s*)?([А-ЯЁ][а-яё]{2,})\s*,?\s*[А-ЯЁ]\.')
     
     for idx, para_text in enumerate(ref_section_paragraphs):
-        # Пропускаем источники без автора (начинаются с названия, URLs и т.д.)
-        if not re.match(r'^\d+\.\s*[А-ЯЁA-Z]', para_text):
+        # Сначала проверяем, начинается ли запись с автора
+        author_match = author_start_pattern.match(para_text)
+        if not author_match:
+            # Запись не начинается с автора (например, начинается с URL, названия организации и т.д.)
             continue
         
-        ru_match = ru_author_pattern.match(para_text)
-        en_match = en_author_pattern.match(para_text)
+        # Проверяем, соответствует ли текст хотя бы одному из паттернов автора с запятой
+        has_valid_author = any(re.search(pattern, para_text) for pattern in author_patterns)
         
-        if not ru_match and not en_match:
+        if not has_valid_author:
             errors.append(ReportError(
                 id=f"Л-9-author-{idx}",
                 code="Л-9",
@@ -1863,6 +1980,535 @@ def validate_typography_format(doc: Document, rules: dict[str, Any]) -> list[Rep
     return errors
 
 
+def validate_toc(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
+    """Проверяет содержание (Со-1): все заголовки должны быть отражены."""
+    errors: list[ReportError] = []
+    
+    # Собираем заголовки H1 и H2 которые должны быть в содержании
+    # Пропускаем служебные разделы — они обычно тоже в содержании но не обязательно
+    SKIP_IN_TOC_CHECK = {"содержани", "оглавлени"}  # сам раздел содержания
+    headings_to_check: list[tuple[int, str]] = []
+    for para_idx, para in enumerate(doc.paragraphs):
+        if para.style and para.style.name in ("Heading 1", "Heading 2"):
+            title = para.text.strip()
+            if not title:
+                continue
+            title_lower = title.lower()
+            # Пропускаем заголовок самого содержания
+            if any(s in title_lower for s in SKIP_IN_TOC_CHECK):
+                continue
+            headings_to_check.append((para_idx, title))
+    
+    # Ищем раздел содержания
+    toc_start_idx = None
+    toc_end_idx = None
+    
+    for para_idx, para in enumerate(doc.paragraphs):
+        text_lower = para.text.lower()
+        if any(s in text_lower for s in SKIP_IN_TOC_CHECK):
+            toc_start_idx = para_idx
+            continue
+        if toc_start_idx is not None and toc_end_idx is None:
+            # Содержание заканчивается когда встречаем H1 не являющийся содержанием
+            if para.style and para.style.name == "Heading 1":
+                toc_end_idx = para_idx
+                break
+    
+    if toc_start_idx is None:
+        if headings_to_check:
+            errors.append(ReportError(
+                id="Со-1-no-toc",
+                code="Со-1",
+                type="formatting",
+                severity="error",
+                location=ErrorLocation(paragraph_index=0, structural_path="Структура документа"),
+                fragment="Содержание отсутствует",
+                rule="Документ должен содержать раздел «Содержание» со всеми заголовками",
+                rule_citation="§3.2, с. 12",
+                found_value="раздел Содержание отсутствует",
+                expected_value="раздел Содержание с перечнем всех заголовков",
+                recommendation="Добавьте раздел «Содержание» после титульного листа"
+            ))
+        return errors
+    
+    # Собираем текст содержания
+    end = toc_end_idx if toc_end_idx else len(doc.paragraphs)
+    toc_paragraphs = [
+        doc.paragraphs[i].text.strip()
+        for i in range(toc_start_idx + 1, end)
+        if doc.paragraphs[i].text.strip()
+    ]
+    
+    # Также ищем поле TOC (автоматическое оглавление Word)
+    # Если найдено — считаем содержание корректным (нельзя проверить без рендеринга)
+    has_toc_field = False
+    for para in doc.paragraphs[toc_start_idx:end]:
+        xml = para._p.xml
+        if 'TOC' in xml or 'w:fldChar' in xml:
+            has_toc_field = True
+            break
+    
+    if has_toc_field:
+        # Автоматическое содержание — доверяем Word, проверку пропускаем
+        return errors
+    
+    if not toc_paragraphs:
+        errors.append(ReportError(
+            id="Со-1-empty-toc",
+            code="Со-1",
+            type="formatting",
+            severity="error",
+            location=ErrorLocation(paragraph_index=toc_start_idx, structural_path="Содержание"),
+            fragment="Содержание пустое",
+            rule="Содержание должно отражать все заголовки с номерами страниц",
+            rule_citation="§3.2, с. 12",
+            found_value="содержание пустое",
+            expected_value="перечень всех заголовков",
+            recommendation="Заполните содержание или используйте автоматическое оглавление Word"
+        ))
+        return errors
+    
+    # Проверяем наличие каждого заголовка в содержании
+    # Стратегия: ищем точное совпадение или совпадение ≥70% слов
+    def heading_in_toc(title: str, toc_lines: list[str]) -> bool:
+        title_norm = re.sub(r'\s+', ' ', title.lower().strip())
+        # 1. Точное совпадение
+        for line in toc_lines:
+            if title_norm in re.sub(r'\s+', ' ', line.lower()):
+                return True
+        # 2. Частичное совпадение: все значимые слова заголовка есть в строке TOC
+        words = [w for w in title_norm.split() if len(w) > 3]
+        if not words:
+            return True  # Слишком короткий заголовок — не проверяем
+        for line in toc_lines:
+            line_norm = re.sub(r'\s+', ' ', line.lower())
+            matches = sum(1 for w in words if w in line_norm)
+            if matches / len(words) >= 0.7:
+                return True
+        return False
+    
+    for heading_idx, title in headings_to_check:
+        if not heading_in_toc(title, toc_paragraphs):
+            errors.append(ReportError(
+                id=f"Со-1-{heading_idx}",
+                code="Со-1",
+                type="formatting",
+                severity="error",
+                location=ErrorLocation(
+                    paragraph_index=heading_idx,
+                    structural_path=f"Заголовок «{title[:50]}»"
+                ),
+                fragment=title[:100],
+                rule="Все заголовки должны быть отражены в содержании",
+                rule_citation="§3.2, с. 12",
+                found_value=f"«{title}» не найден в содержании",
+                expected_value="заголовок присутствует в содержании",
+                recommendation="Добавьте этот заголовок в содержание или обновите автоматическое оглавление"
+            ))
+    
+    return errors
+
+
+def validate_appendix(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
+    """П-1..П-4: оформление приложений."""
+    errors: list[ReportError] = []
+
+    appendix_heading_pattern = re.compile(
+        r'^Приложение\s+([А-ЯЁA-Z\d])\s*$', re.IGNORECASE
+    )
+    # Ссылки в тексте: "(прил. А)", "(прил. 1)", "приложение А"
+    appendix_ref_pattern = re.compile(
+        r'(?:прил\.\s*([А-ЯЁA-Z\d]+)|\bприложени[еяю]\s+([А-ЯЁA-Z\d]+))',
+        re.IGNORECASE
+    )
+
+    def _has_page_break_before(para, para_idx: int) -> bool:
+        """True если перед абзацем есть разрыв страницы."""
+        pPr = para._p.find(qn('w:pPr'))
+        if pPr is not None:
+            pb = pPr.find(qn('w:pageBreakBefore'))
+            if pb is not None:
+                val = pb.get(qn('w:val'))
+                if val is None or val in ('1', 'true', 'on'):
+                    return True
+        if para_idx > 0:
+            prev_para = doc.paragraphs[para_idx - 1]
+            for br in prev_para._p.iter(qn('w:br')):
+                if br.get(qn('w:type')) == 'page':
+                    return True
+        return False
+
+    def _get_alignment(para) -> str | None:
+        pPr = para._p.find(qn('w:pPr'))
+        jc_el = pPr.find(qn('w:jc')) if pPr is not None else None
+        if jc_el is not None:
+            return jc_el.get(qn('w:val'))
+        if para.style and para.style.paragraph_format:
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            fmt = para.style.paragraph_format
+            mapping = {
+                WD_ALIGN_PARAGRAPH.RIGHT: "right",
+                WD_ALIGN_PARAGRAPH.CENTER: "center",
+                WD_ALIGN_PARAGRAPH.LEFT: "left",
+                WD_ALIGN_PARAGRAPH.JUSTIFY: "both",
+            }
+            if fmt.alignment in mapping:
+                return mapping[fmt.alignment]
+        return None
+
+    # Собираем порядок первого упоминания приложений в тексте
+    refs_order: list[str] = []
+    seen_refs: set[str] = set()
+    for para in doc.paragraphs:
+        # Пропускаем сами заголовки приложений
+        if appendix_heading_pattern.match(para.text.strip()):
+            continue
+        for m in appendix_ref_pattern.finditer(para.text):
+            letter = (m.group(1) or m.group(2) or "").upper().strip()
+            if letter and letter not in seen_refs:
+                refs_order.append(letter)
+                seen_refs.add(letter)
+
+    # Находим приложения в документе
+    appendices: list[dict] = []  # {idx, letter, title_idx, title}
+
+    i = 0
+    paras = doc.paragraphs
+    while i < len(paras):
+        para = paras[i]
+        m = appendix_heading_pattern.match(para.text.strip())
+        if m:
+            letter = m.group(1).upper()
+            app = {"idx": i, "letter": letter, "title_idx": None, "title": None}
+
+            # П-1: разрыв страницы
+            if not _has_page_break_before(para, i):
+                errors.append(ReportError(
+                    id=f"П-1-{i}",
+                    code="П-1",
+                    type="formatting",
+                    severity="error",
+                    location=ErrorLocation(paragraph_index=i,
+                                           structural_path=f"Приложение {letter}"),
+                    fragment=para.text.strip()[:100],
+                    rule="Каждое приложение должно начинаться с новой страницы",
+                    rule_citation="§4.6, с. 59",
+                    found_value="нет разрыва страницы",
+                    expected_value="разрыв страницы перед приложением",
+                    recommendation="Поставьте курсор перед «Приложение» и нажмите Ctrl+Enter"
+                ))
+
+            # П-2: выравнивание "Приложение N" — должно быть справа
+            alignment = _get_alignment(para)
+            if alignment != "right":
+                errors.append(ReportError(
+                    id=f"П-2-{i}",
+                    code="П-2",
+                    type="formatting",
+                    severity="error",
+                    location=ErrorLocation(paragraph_index=i,
+                                           structural_path=f"Приложение {letter}"),
+                    fragment=para.text.strip()[:100],
+                    rule="Надпись «Приложение N» должна быть выровнена по правому краю",
+                    rule_citation="§4.6, с. 59",
+                    found_value=alignment or "не задано",
+                    expected_value="right",
+                    recommendation="Выделите строку «Приложение N» → Главная → Выровнять по правому краю"
+                ))
+
+            # Ищем название приложения — следующий непустой абзац
+            j = i + 1
+            while j < len(paras) and not paras[j].text.strip():
+                j += 1
+
+            if j < len(paras):
+                next_para = paras[j]
+                next_text = next_para.text.strip()
+                # Это название если не является другим "Приложение X" и не H1
+                is_another_app = bool(appendix_heading_pattern.match(next_text))
+                is_h1 = next_para.style and next_para.style.name == "Heading 1"
+
+                if not is_another_app and not is_h1 and next_text:
+                    app["title_idx"] = j
+                    app["title"] = next_text
+
+                    # П-3а: выравнивание названия — центр
+                    title_align = _get_alignment(next_para)
+                    if title_align != "center":
+                        errors.append(ReportError(
+                            id=f"П-3-align-{j}",
+                            code="П-3",
+                            type="formatting",
+                            severity="error",
+                            location=ErrorLocation(paragraph_index=j,
+                                                   structural_path=f"Название приложения {letter}"),
+                            fragment=next_text[:100],
+                            rule="Название приложения должно быть выровнено по центру",
+                            rule_citation="§4.6, с. 59",
+                            found_value=title_align or "не задано",
+                            expected_value="center",
+                            recommendation="Выделите название → Главная → По центру"
+                        ))
+
+                    # П-3б: нет точки в конце
+                    if next_text.endswith('.'):
+                        errors.append(ReportError(
+                            id=f"П-3-dot-{j}",
+                            code="П-3",
+                            type="formatting",
+                            severity="error",
+                            location=ErrorLocation(paragraph_index=j,
+                                                   structural_path=f"Название приложения {letter}"),
+                            fragment=next_text[:100],
+                            rule="Название приложения не должно заканчиваться точкой",
+                            rule_citation="§4.6, с. 59",
+                            found_value=next_text[-10:],
+                            expected_value="без точки в конце",
+                            recommendation="Удалите точку в конце названия приложения"
+                        ))
+
+            appendices.append(app)
+        i += 1
+
+    # П-4: порядок приложений соответствует порядку ссылок
+    if refs_order and appendices:
+        app_letters_in_doc = [a["letter"] for a in appendices]
+        # Фильтруем refs_order — оставляем только те буквы, которые реально есть
+        filtered_refs = [r for r in refs_order if r in app_letters_in_doc]
+
+        # Проверяем что порядок приложений в документе совпадает с порядком упоминания
+        if filtered_refs and filtered_refs != app_letters_in_doc[:len(filtered_refs)]:
+            errors.append(ReportError(
+                id="П-4-order",
+                code="П-4",
+                type="formatting",
+                severity="error",
+                location=ErrorLocation(paragraph_index=appendices[0]["idx"],
+                                       structural_path="Приложения"),
+                fragment=f"Порядок в документе: {', '.join(app_letters_in_doc)}",
+                rule="Приложения нумеруются в порядке упоминания в тексте",
+                rule_citation="§4.6, с. 59",
+                found_value=f"в документе: {', '.join(app_letters_in_doc)}",
+                expected_value=f"по порядку ссылок: {', '.join(filtered_refs)}",
+                recommendation="Переставьте приложения в порядке их упоминания в тексте"
+            ))
+        
+        # Также проверяем что все ссылки на приложения соответствуют реальным приложениям
+        missing_apps = [r for r in refs_order if r not in app_letters_in_doc]
+        if missing_apps:
+            errors.append(ReportError(
+                id="П-4-missing",
+                code="П-4",
+                type="formatting",
+                severity="error",
+                location=ErrorLocation(paragraph_index=appendices[0]["idx"],
+                                       structural_path="Приложения"),
+                fragment=f"Отсутствуют приложения: {', '.join(missing_apps)}",
+                rule="Все упомянутые в тексте приложения должны присутствовать в документе",
+                rule_citation="§4.6, с. 59",
+                found_value=f"приложения {', '.join(missing_apps)} отсутствуют",
+                expected_value=f"приложения {', '.join(missing_apps)} должны быть в документе",
+                recommendation="Добавьте отсутствующие приложения или исправьте ссылки в тексте"
+            ))
+
+    return errors
+
+
+def validate_repeated_references(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
+    """
+    Л-2: Повторная ссылка в том же или следующем абзаце должна быть [там же, с. X].
+    
+    Правило применяется ТОЛЬКО когда:
+    - В абзаце есть две или более ссылок на ОДИН источник [N, с. X] и [N, с. Y]
+    - ИЛИ в следующем абзаце сразу же снова идёт ссылка на тот же источник
+    """
+    errors: list[ReportError] = []
+
+    ref_with_page = re.compile(r'\[(\d+),\s*с\.\s*(\d+)\]')
+    correct_repeat = re.compile(r'\[там же(?:,\s*с\.\s*\d+)?\]', re.IGNORECASE)
+
+    paras = doc.paragraphs
+
+    for para_idx, para in enumerate(paras):
+        text = para.text
+
+        # Случай 1: В одном абзаце два раза один источник с разными страницами
+        refs_in_para: dict[str, list[str]] = {}  # source_num -> [pages]
+        for m in ref_with_page.finditer(text):
+            src = m.group(1)
+            page = m.group(2)
+            refs_in_para.setdefault(src, []).append(page)
+
+        for src, pages in refs_in_para.items():
+            if len(pages) > 1 and not correct_repeat.search(text):
+                # Несколько ссылок на один источник в абзаце без "там же"
+                errors.append(ReportError(
+                    id=f"Л-2-same-para-{para_idx}-{src}",
+                    code="Л-2",
+                    type="formatting",
+                    severity="error",
+                    location=ErrorLocation(
+                        paragraph_index=para_idx,
+                        structural_path=f"Абзац {para_idx + 1}"
+                    ),
+                    fragment=text[:100],
+                    rule="Повторная ссылка на тот же источник в одном абзаце должна быть [там же, с. X]",
+                    rule_citation="§4.3, с. 49",
+                    found_value=f"[{src}, с. {pages[0]}]...[{src}, с. {pages[1]}]",
+                    expected_value=f"[{src}, с. {pages[0]}]...[там же, с. {pages[1]}]",
+                    recommendation="Замените второй [N, с. X] на [там же, с. X]"
+                ))
+
+        # Случай 2: Следующий абзац начинается ссылкой на тот же источник
+        # что и последняя ссылка текущего абзаца — и нет "там же"
+        if para_idx + 1 >= len(paras):
+            continue
+
+        # Последний источник в текущем абзаце
+        last_ref_in_current = None
+        for m in ref_with_page.finditer(text):
+            last_ref_in_current = m.group(1)
+
+        if last_ref_in_current is None:
+            continue
+
+        next_para = paras[para_idx + 1]
+        next_text = next_para.text
+
+        # Если следующий абзац начинается с ссылки на тот же источник
+        first_ref_match = re.match(r'^\s*\[(\d+),\s*с\.\s*\d+\]', next_text)
+        if first_ref_match:
+            first_src_next = first_ref_match.group(1)
+            if (first_src_next == last_ref_in_current
+                    and not correct_repeat.search(next_text)):
+                errors.append(ReportError(
+                    id=f"Л-2-next-para-{para_idx + 1}-{first_src_next}",
+                    code="Л-2",
+                    type="formatting",
+                    severity="error",
+                    location=ErrorLocation(
+                        paragraph_index=para_idx + 1,
+                        structural_path=f"Абзац {para_idx + 2}"
+                    ),
+                    fragment=next_text[:100],
+                    rule="Повторная ссылка в следующем абзаце должна быть [там же, с. X]",
+                    rule_citation="§4.3, с. 49",
+                    found_value=first_ref_match.group(0),
+                    expected_value="[там же, с. X]",
+                    recommendation="Замените ссылку на [там же, с. X] в начале абзаца"
+                ))
+
+    return errors
+
+
+def validate_list_numbering(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
+    """
+    Проверяет сплошную нумерацию источников в списке литературы.
+    
+    Л-5: источники должны быть пронумерованы сплошной нумерацией (1., 2., 3., ...)
+    """
+    errors: list[ReportError] = []
+    
+    # Находим раздел "Список литературы"
+    bibliography_start_idx = None
+    bibliography_end_idx = None
+    
+    for para_idx, para in enumerate(doc.paragraphs):
+        text_lower = para.text.lower()
+        if "список литературы" in text_lower or "библиографический список" in text_lower:
+            bibliography_start_idx = para_idx
+            continue
+        
+        if bibliography_start_idx is not None and bibliography_end_idx is None:
+            # Раздел заканчивается, когда встречаем следующий заголовок H1
+            if para.style and para.style.name == "Heading 1":
+                bibliography_end_idx = para_idx
+                break
+    
+    if bibliography_start_idx is None:
+        # Нет раздела списка литературы - пропускаем проверку
+        return errors
+    
+    # Собираем параграфы списка литературы
+    end = bibliography_end_idx if bibliography_end_idx else len(doc.paragraphs)
+    bibliography_paragraphs = []
+    for i in range(bibliography_start_idx + 1, end):
+        para = doc.paragraphs[i]
+        if para.text.strip():
+            bibliography_paragraphs.append((i, para))
+    
+    if not bibliography_paragraphs:
+        return errors
+    
+    # Паттерн для нумерации источников: "1.", "2.", "1)" и т.д.
+    numbering_pattern = re.compile(r'^(\d+)[\.\)]\s')
+    
+    expected_number = 1
+    found_numbering_issues = False
+    
+    for para_idx, para in bibliography_paragraphs:
+        text = para.text.strip()
+        
+        # Проверяем наличие нумерации
+        match = numbering_pattern.match(text)
+        if match:
+            actual_number = int(match.group(1))
+            if actual_number != expected_number:
+                # Нумерация нарушена
+                found_numbering_issues = True
+                errors.append(ReportError(
+                    id=f"Л-5-{para_idx}",
+                    code="Л-5",
+                    type="formatting",
+                    severity="error",
+                    location=ErrorLocation(
+                        paragraph_index=para_idx,
+                        structural_path="Список литературы"
+                    ),
+                    fragment=text[:100],
+                    rule="Источники должны быть пронумерованы сплошной нумерацией",
+                    rule_citation="§4.3, с. 49",
+                    found_value=f"номер {actual_number}",
+                    expected_value=f"номер {expected_number}",
+                    recommendation="Исправьте нумерацию источников на сплошную"
+                ))
+            expected_number = actual_number + 1
+        else:
+            # Параграф без нумерации - возможно это продолжение предыдущего источника
+            # или ошибка форматирования
+            # Проверяем, не начинается ли с отступа (продолжение)
+            pPr = para._p.pPr
+            has_indent = False
+            if pPr is not None:
+                ind_el = pPr.find(qn('w:ind'))
+                if ind_el is not None:
+                    left = ind_el.get(qn('w:left'))
+                    if left is not None and int(left) > 0:
+                        has_indent = True
+            
+            if not has_indent and len(text) > 10:
+                # Это похоже на новый источник, но без нумерации
+                found_numbering_issues = True
+                errors.append(ReportError(
+                    id=f"Л-5-no-num-{para_idx}",
+                    code="Л-5",
+                    type="formatting",
+                    severity="error",
+                    location=ErrorLocation(
+                        paragraph_index=para_idx,
+                        structural_path="Список литературы"
+                    ),
+                    fragment=text[:100],
+                    rule="Источники должны быть пронумерованы сплошной нумерацией",
+                    rule_citation="§4.3, с. 49",
+                    found_value="нумерация отсутствует",
+                    expected_value=f"номер {expected_number}.",
+                    recommendation="Добавьте номер источника"
+                ))
+    
+    return errors
+
+
 def validate_format(docx_path: str, rules: dict[str, Any]) -> ValidationReport:
     """
     Выполняет полную валидацию форматирования DOCX-документа.
@@ -1885,6 +2531,10 @@ def validate_format(docx_path: str, rules: dict[str, Any]) -> ValidationReport:
     errors.extend(validate_tables(doc, rules))
     errors.extend(validate_references_format(doc, rules))
     errors.extend(validate_typography_format(doc, rules))
+    errors.extend(validate_toc(doc, rules))
+    errors.extend(validate_appendix(doc, rules))
+    errors.extend(validate_repeated_references(doc, rules))
+    errors.extend(validate_list_numbering(doc, rules))
     
     # Подсчитываем статистику
     formatting_count = sum(1 for e in errors if e.type == "formatting")
