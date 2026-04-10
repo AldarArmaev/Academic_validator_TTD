@@ -484,3 +484,57 @@ def test_L_12_hyphen_instead_of_dash_error(rules, wrong_L_12_hyphen_instead_of_d
     report = validate_format(str(wrong_L_12_hyphen_instead_of_dash_docx), rules)
     errors = [e for e in report.errors if e.code == "Л-12"]
     assert len(errors) >= 1, "Ошибка Л-12 не обнаружена"
+
+
+# =============================================================================
+# Тесты содержания (Со-*)
+# =============================================================================
+
+def test_So_1_toc_contains_all_headings_error(rules, wrong_So_1_toc_missing_headings_docx):
+    """Со-1: содержание не отражает все заголовки с номерами страниц."""
+    report = validate_format(str(wrong_So_1_toc_missing_headings_docx), rules)
+    errors = [e for e in report.errors if e.code == "Со-1"]
+    assert len(errors) >= 1, "Ошибка Со-1 не обнаружена"
+
+
+# =============================================================================
+# Тесты приложений (П-*)
+# =============================================================================
+
+def test_P_1_appendix_new_page_error(rules, wrong_P_1_appendix_no_new_page_docx):
+    """П-1: приложение не начинается с новой страницы."""
+    report = validate_format(str(wrong_P_1_appendix_no_new_page_docx), rules)
+    errors = [e for e in report.errors if e.code == "П-1"]
+    assert len(errors) >= 1, "Ошибка П-1 не обнаружена"
+
+
+def test_P_2_appendix_label_right_top_error(rules, wrong_P_2_appendix_label_position_docx):
+    """П-2: надпись 'Приложение N' не в правом верхнем углу."""
+    report = validate_format(str(wrong_P_2_appendix_label_position_docx), rules)
+    errors = [e for e in report.errors if e.code == "П-2"]
+    assert len(errors) >= 1, "Ошибка П-2 не обнаружена"
+
+
+def test_P_3_appendix_title_centered_no_period_error(rules, wrong_P_3_appendix_title_format_docx):
+    """П-3: название приложения не по центру или с точкой."""
+    report = validate_format(str(wrong_P_3_appendix_title_format_docx), rules)
+    errors = [e for e in report.errors if e.code == "П-3"]
+    assert len(errors) >= 1, "Ошибка П-3 не обнаружена"
+
+
+def test_P_4_appendix_numbering_order_error(rules, wrong_P_4_appendix_numbering_order_docx):
+    """П-4: нумерация приложений не в порядке ссылок."""
+    report = validate_format(str(wrong_P_4_appendix_numbering_order_docx), rules)
+    errors = [e for e in report.errors if e.code == "П-4"]
+    assert len(errors) >= 1, "Ошибка П-4 не обнаружена"
+
+
+# =============================================================================
+# Тесты повторных ссылок (Л-2)
+# =============================================================================
+
+def test_L_2_repeated_ref_format_error(rules, wrong_L_2_repeated_ref_format_docx):
+    """Л-2: повторная ссылка оформлена неправильно (должна быть [там же, с. X])."""
+    report = validate_format(str(wrong_L_2_repeated_ref_format_docx), rules)
+    errors = [e for e in report.errors if e.code == "Л-2"]
+    assert len(errors) >= 1, "Ошибка Л-2 не обнаружена"

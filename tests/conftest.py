@@ -216,3 +216,45 @@ def wrong_L_11_invalid_reference_docx():
 @pytest.fixture
 def wrong_L_12_hyphen_instead_of_dash_docx():
     return FIXTURES_DIR / "references" / "wrong_L_12_hyphen_instead_of_dash.docx"
+
+
+# ── Фикстуры для тестов содержания (Со-*) ─────────────────────────────────────
+
+@pytest.fixture
+def wrong_So_1_toc_missing_headings_docx():
+    """Нарушение Со-1: в содержании отсутствуют некоторые заголовки."""
+    return FIXTURES_DIR / "toc" / "wrong_So_1_toc_missing_headings.docx"
+
+
+# ── Фикстуры для тестов приложений (П-*) ──────────────────────────────────────
+
+@pytest.fixture
+def wrong_P_1_appendix_no_new_page_docx():
+    """Нарушение П-1: приложение не начинается с новой страницы."""
+    return FIXTURES_DIR / "appendix" / "wrong_P_1_appendix_no_new_page.docx"
+
+
+@pytest.fixture
+def wrong_P_2_appendix_label_position_docx():
+    """Нарушение П-2: надпись 'Приложение N' не в правом верхнем углу."""
+    return FIXTURES_DIR / "appendix" / "wrong_P_2_appendix_label_position.docx"
+
+
+@pytest.fixture
+def wrong_P_3_appendix_title_format_docx():
+    """Нарушение П-3: название приложения не по центру или с точкой."""
+    return FIXTURES_DIR / "appendix" / "wrong_P_3_appendix_title_format.docx"
+
+
+@pytest.fixture
+def wrong_P_4_appendix_numbering_order_docx():
+    """Нарушение П-4: нумерация приложений не в порядке ссылок."""
+    return FIXTURES_DIR / "appendix" / "wrong_P_4_appendix_numbering_order.docx"
+
+
+# ── Дополнительные фикстуры для ссылок (Л-*) ──────────────────────────────────
+
+@pytest.fixture
+def wrong_L_2_repeated_ref_format_docx():
+    """Нарушение Л-2: повторная ссылка оформлена неправильно."""
+    return FIXTURES_DIR / "references" / "wrong_L_2_repeated_ref_format.docx"
