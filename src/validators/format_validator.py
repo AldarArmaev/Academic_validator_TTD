@@ -1981,81 +1981,114 @@ def validate_typography_format(doc: Document, rules: dict[str, Any]) -> list[Rep
 
 
 def validate_toc(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
-    """
-    Проверяет содержание документа.
-    
-    Со-1: содержание отражает все заголовки с номерами страниц
-    """
+    """Проверяет содержание (Со-1): все заголовки должны быть отражены."""
     errors: list[ReportError] = []
     
-    # Собираем все заголовки Heading 1 и Heading 2
-    headings_in_doc: list[tuple[int, str, str]] = []  # (idx, style, text)
+    # Собираем заголовки H1 и H2 которые должны быть в содержании
+    # Пропускаем служебные разделы — они обычно тоже в содержании но не обязательно
+    SKIP_IN_TOC_CHECK = {"содержани", "оглавлени"}  # сам раздел содержания
+    headings_to_check: list[tuple[int, str]] = []
     for para_idx, para in enumerate(doc.paragraphs):
         if para.style and para.style.name in ("Heading 1", "Heading 2"):
             title = para.text.strip()
-            if title:
-                headings_in_doc.append((para_idx, para.style.name, title))
+            if not title:
+                continue
+            title_lower = title.lower()
+            # Пропускаем заголовок самого содержания
+            if any(s in title_lower for s in SKIP_IN_TOC_CHECK):
+                continue
+            headings_to_check.append((para_idx, title))
     
     # Ищем раздел содержания
     toc_start_idx = None
-    toc_paragraphs: list[str] = []
+    toc_end_idx = None
     
     for para_idx, para in enumerate(doc.paragraphs):
         text_lower = para.text.lower()
-        if "содержани" in text_lower or "оглавлени" in text_lower:
+        if any(s in text_lower for s in SKIP_IN_TOC_CHECK):
             toc_start_idx = para_idx
             continue
-        
-        if toc_start_idx is not None:
-            # Содержание закончилось, когда встретили следующий Heading 1 (Введение или Глава 1)
+        if toc_start_idx is not None and toc_end_idx is None:
+            # Содержание заканчивается когда встречаем H1 не являющийся содержанием
             if para.style and para.style.name == "Heading 1":
+                toc_end_idx = para_idx
                 break
-            if para.text.strip():
-                toc_paragraphs.append(para.text.strip())
     
-    # Если содержания нет вообще - это ошибка Со-1
     if toc_start_idx is None:
-        if headings_in_doc:
+        if headings_to_check:
             errors.append(ReportError(
                 id="Со-1-no-toc",
                 code="Со-1",
                 type="formatting",
                 severity="error",
-                location=ErrorLocation(
-                    paragraph_index=0,
-                    structural_path="Структура документа"
-                ),
-                fragment="Документ не содержит раздела \"Содержание\"",
-                rule="Документ должен содержать содержание со всеми заголовками и номерами страниц",
-                rule_citation="§3.4, с. 43",
-                found_value="содержание отсутствует",
-                expected_value="раздел \"Содержание\" с перечнем всех заголовков",
-                recommendation="Добавьте раздел \"Содержание\" в начало документа"
+                location=ErrorLocation(paragraph_index=0, structural_path="Структура документа"),
+                fragment="Содержание отсутствует",
+                rule="Документ должен содержать раздел «Содержание» со всеми заголовками",
+                rule_citation="§3.2, с. 12",
+                found_value="раздел Содержание отсутствует",
+                expected_value="раздел Содержание с перечнем всех заголовков",
+                recommendation="Добавьте раздел «Содержание» после титульного листа"
             ))
         return errors
     
-    # Проверяем, что все заголовки из документа есть в содержании
-    toc_text = " ".join(toc_paragraphs).lower()
+    # Собираем текст содержания
+    end = toc_end_idx if toc_end_idx else len(doc.paragraphs)
+    toc_paragraphs = [
+        doc.paragraphs[i].text.strip()
+        for i in range(toc_start_idx + 1, end)
+        if doc.paragraphs[i].text.strip()
+    ]
     
-    for heading_idx, style_name, title in headings_in_doc:
-        # Пропускаем служебные заголовки
-        title_lower = title.lower()
-        if any(s in title_lower for s in ["введение", "заключение", "список литературы", "приложен", "содержани"]):
-            continue
-        
-        # Ищем заголовок в содержании (хотя бы часть)
-        title_words = title_lower.split()
-        if len(title_words) < 2:
-            continue
-        
-        # Проверяем наличие ключевых слов заголовка в содержании
-        found_in_toc = False
-        for word in title_words[1:]:  # Пропускаем номер главы/параграфа
-            if len(word) > 3 and word in toc_text:
-                found_in_toc = True
-                break
-        
-        if not found_in_toc:
+    # Также ищем поле TOC (автоматическое оглавление Word)
+    # Если найдено — считаем содержание корректным (нельзя проверить без рендеринга)
+    has_toc_field = False
+    for para in doc.paragraphs[toc_start_idx:end]:
+        xml = para._p.xml
+        if 'TOC' in xml or 'w:fldChar' in xml:
+            has_toc_field = True
+            break
+    
+    if has_toc_field:
+        # Автоматическое содержание — доверяем Word, проверку пропускаем
+        return errors
+    
+    if not toc_paragraphs:
+        errors.append(ReportError(
+            id="Со-1-empty-toc",
+            code="Со-1",
+            type="formatting",
+            severity="error",
+            location=ErrorLocation(paragraph_index=toc_start_idx, structural_path="Содержание"),
+            fragment="Содержание пустое",
+            rule="Содержание должно отражать все заголовки с номерами страниц",
+            rule_citation="§3.2, с. 12",
+            found_value="содержание пустое",
+            expected_value="перечень всех заголовков",
+            recommendation="Заполните содержание или используйте автоматическое оглавление Word"
+        ))
+        return errors
+    
+    # Проверяем наличие каждого заголовка в содержании
+    # Стратегия: ищем точное совпадение или совпадение ≥70% слов
+    def heading_in_toc(title: str, toc_lines: list[str]) -> bool:
+        title_norm = re.sub(r'\s+', ' ', title.lower().strip())
+        # 1. Точное совпадение
+        for line in toc_lines:
+            if title_norm in re.sub(r'\s+', ' ', line.lower()):
+                return True
+        # 2. Частичное совпадение: все значимые слова заголовка есть в строке TOC
+        words = [w for w in title_norm.split() if len(w) > 3]
+        if not words:
+            return True  # Слишком короткий заголовок — не проверяем
+        for line in toc_lines:
+            line_norm = re.sub(r'\s+', ' ', line.lower())
+            matches = sum(1 for w in words if w in line_norm)
+            if matches / len(words) >= 0.7:
+                return True
+        return False
+    
+    for heading_idx, title in headings_to_check:
+        if not heading_in_toc(title, toc_paragraphs):
             errors.append(ReportError(
                 id=f"Со-1-{heading_idx}",
                 code="Со-1",
@@ -2063,14 +2096,14 @@ def validate_toc(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
                 severity="error",
                 location=ErrorLocation(
                     paragraph_index=heading_idx,
-                    structural_path=f"Заголовок '{title[:50]}'"
+                    structural_path=f"Заголовок «{title[:50]}»"
                 ),
                 fragment=title[:100],
-                rule="Содержание должно отражать все заголовки с номерами страниц",
-                rule_citation="§3.4, с. 43",
-                found_value=f"заголовок '{title}' отсутствует в содержании",
-                expected_value="все заголовки должны быть в содержании",
-                recommendation="Добавьте отсутствующий заголовок в содержание"
+                rule="Все заголовки должны быть отражены в содержании",
+                rule_citation="§3.2, с. 12",
+                found_value=f"«{title}» не найден в содержании",
+                expected_value="заголовок присутствует в содержании",
+                recommendation="Добавьте этот заголовок в содержание или обновите автоматическое оглавление"
             ))
     
     return errors
@@ -2087,7 +2120,7 @@ def validate_appendix(doc: Document, rules: dict[str, Any]) -> list[ReportError]
     """
     errors: list[ReportError] = []
     
-    appendix_pattern = re.compile(r'Приложение\s+([A-ZА-Я])', re.IGNORECASE)
+    appendix_pattern = re.compile(r'Приложение\s+([A-ZА-Я\d])', re.IGNORECASE)
     appendix_ref_pattern = re.compile(r'прил\.\s*\d+', re.IGNORECASE)
     
     # Собираем ссылки на приложения из текста (порядок упоминания)
@@ -2321,6 +2354,114 @@ def validate_repeated_references(doc: Document, rules: dict[str, Any]) -> list[R
     return errors
 
 
+def validate_list_numbering(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
+    """
+    Проверяет сплошную нумерацию источников в списке литературы.
+    
+    Л-5: источники должны быть пронумерованы сплошной нумерацией (1., 2., 3., ...)
+    """
+    errors: list[ReportError] = []
+    
+    # Находим раздел "Список литературы"
+    bibliography_start_idx = None
+    bibliography_end_idx = None
+    
+    for para_idx, para in enumerate(doc.paragraphs):
+        text_lower = para.text.lower()
+        if "список литературы" in text_lower or "библиографический список" in text_lower:
+            bibliography_start_idx = para_idx
+            continue
+        
+        if bibliography_start_idx is not None and bibliography_end_idx is None:
+            # Раздел заканчивается, когда встречаем следующий заголовок H1
+            if para.style and para.style.name == "Heading 1":
+                bibliography_end_idx = para_idx
+                break
+    
+    if bibliography_start_idx is None:
+        # Нет раздела списка литературы - пропускаем проверку
+        return errors
+    
+    # Собираем параграфы списка литературы
+    end = bibliography_end_idx if bibliography_end_idx else len(doc.paragraphs)
+    bibliography_paragraphs = []
+    for i in range(bibliography_start_idx + 1, end):
+        para = doc.paragraphs[i]
+        if para.text.strip():
+            bibliography_paragraphs.append((i, para))
+    
+    if not bibliography_paragraphs:
+        return errors
+    
+    # Паттерн для нумерации источников: "1.", "2.", "1)" и т.д.
+    numbering_pattern = re.compile(r'^(\d+)[\.\)]\s')
+    
+    expected_number = 1
+    found_numbering_issues = False
+    
+    for para_idx, para in bibliography_paragraphs:
+        text = para.text.strip()
+        
+        # Проверяем наличие нумерации
+        match = numbering_pattern.match(text)
+        if match:
+            actual_number = int(match.group(1))
+            if actual_number != expected_number:
+                # Нумерация нарушена
+                found_numbering_issues = True
+                errors.append(ReportError(
+                    id=f"Л-5-{para_idx}",
+                    code="Л-5",
+                    type="formatting",
+                    severity="error",
+                    location=ErrorLocation(
+                        paragraph_index=para_idx,
+                        structural_path="Список литературы"
+                    ),
+                    fragment=text[:100],
+                    rule="Источники должны быть пронумерованы сплошной нумерацией",
+                    rule_citation="§4.3, с. 49",
+                    found_value=f"номер {actual_number}",
+                    expected_value=f"номер {expected_number}",
+                    recommendation="Исправьте нумерацию источников на сплошную"
+                ))
+            expected_number = actual_number + 1
+        else:
+            # Параграф без нумерации - возможно это продолжение предыдущего источника
+            # или ошибка форматирования
+            # Проверяем, не начинается ли с отступа (продолжение)
+            pPr = para._p.pPr
+            has_indent = False
+            if pPr is not None:
+                ind_el = pPr.find(qn('w:ind'))
+                if ind_el is not None:
+                    left = ind_el.get(qn('w:left'))
+                    if left is not None and int(left) > 0:
+                        has_indent = True
+            
+            if not has_indent and len(text) > 10:
+                # Это похоже на новый источник, но без нумерации
+                found_numbering_issues = True
+                errors.append(ReportError(
+                    id=f"Л-5-no-num-{para_idx}",
+                    code="Л-5",
+                    type="formatting",
+                    severity="error",
+                    location=ErrorLocation(
+                        paragraph_index=para_idx,
+                        structural_path="Список литературы"
+                    ),
+                    fragment=text[:100],
+                    rule="Источники должны быть пронумерованы сплошной нумерацией",
+                    rule_citation="§4.3, с. 49",
+                    found_value="нумерация отсутствует",
+                    expected_value=f"номер {expected_number}.",
+                    recommendation="Добавьте номер источника"
+                ))
+    
+    return errors
+
+
 def validate_format(docx_path: str, rules: dict[str, Any]) -> ValidationReport:
     """
     Выполняет полную валидацию форматирования DOCX-документа.
@@ -2343,6 +2484,10 @@ def validate_format(docx_path: str, rules: dict[str, Any]) -> ValidationReport:
     errors.extend(validate_tables(doc, rules))
     errors.extend(validate_references_format(doc, rules))
     errors.extend(validate_typography_format(doc, rules))
+    errors.extend(validate_toc(doc, rules))
+    errors.extend(validate_appendix(doc, rules))
+    errors.extend(validate_repeated_references(doc, rules))
+    errors.extend(validate_list_numbering(doc, rules))
     
     # Подсчитываем статистику
     formatting_count = sum(1 for e in errors if e.type == "formatting")
