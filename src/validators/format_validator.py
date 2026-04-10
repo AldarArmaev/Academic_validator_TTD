@@ -1217,12 +1217,12 @@ def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
     # =============================================================================
     
     # Собираем информацию о рисунках в потоке элементов
-    # Ищем w:drawing внутри параграфов
+    # Ищем w:drawing внутри параграфов (используем iter для поиска во всех descendant элементах)
     figure_elements = []  # (para_index, element)
     
     for para_idx, para in enumerate(doc.paragraphs):
-        drawing = para._p.find(qn('w:drawing'))
-        if drawing is not None:
+        drawings = list(para._p.iter(qn('w:drawing')))
+        if drawings:
             figure_elements.append((para_idx, para._p))
     
     # Т-7: Подпись рисунка: «Рис. N. Название» — под рисунком, по центру
@@ -1313,8 +1313,27 @@ def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
                         recommendation="Начните название рисунка с прописной буквы"
                     ))
                 
-                # Т-8: Точка после «Рис. N.» уже проверена паттерном (она должна быть)
-                # Проверяем, что в конце названия нет точки
+                # Т-8: Проверяем наличие точки после слова "Рис" (должна быть)
+                # Паттерн допускает отсутствие точки, но по стандарту она должна быть
+                if not para_text.startswith('Рис.'):
+                    errors.append(ReportError(
+                        id=f"Т-8-dot-after-ris-{next_idx}",
+                        code="Т-8",
+                        type="formatting",
+                        severity="error",
+                        location=ErrorLocation(
+                            paragraph_index=next_idx,
+                            structural_path=f"Подпись рисунка {fig_idx + 1}"
+                        ),
+                        fragment=para_text[:100],
+                        rule="После слова «Рис» должна стоять точка",
+                        rule_citation="§4.4, с. 50-52",
+                        found_value=para_text[:10],
+                        expected_value="Рис.",
+                        recommendation="Добавьте точку после слова «Рис»"
+                    ))
+                
+                # Т-8: Проверяем, что в конце названия нет точки
                 if para_text.rstrip().endswith('.'):
                     errors.append(ReportError(
                         id=f"Т-8-dot-at-end-{next_idx}",
@@ -1334,32 +1353,44 @@ def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
                     ))
                 
                 # Т-10: Интервал в названиях рисунков — 1 (240 twips)
+                # Проверяем явный w:spacing в параграфе или наследуемый из стиля
                 spacing_el = pPr.find(qn('w:spacing')) if pPr is not None else None
+                actual_spacing = None
+                
                 if spacing_el is not None:
                     line_val = spacing_el.get(qn('w:line'))
                     if line_val is not None:
                         try:
                             actual_spacing = int(line_val)
-                            expected_figure_spacing = 240  # 1.0 интервал
-                            if abs(actual_spacing - expected_figure_spacing) > 20:
-                                errors.append(ReportError(
-                                    id=f"Т-10-spacing-{next_idx}",
-                                    code="Т-10",
-                                    type="formatting",
-                                    severity="error",
-                                    location=ErrorLocation(
-                                        paragraph_index=next_idx,
-                                        structural_path=f"Подпись рисунка {fig_idx + 1}"
-                                    ),
-                                    fragment=para_text[:100],
-                                    rule="Интервал в названии рисунка должен быть 1.0 (240 twips)",
-                                    rule_citation="§4.4, с. 50-52",
-                                    found_value=str(actual_spacing),
-                                    expected_value=str(expected_figure_spacing),
-                                    recommendation="Установите межстрочный интервал 1.0"
-                                ))
                         except ValueError:
                             pass
+                else:
+                    # Если нет явного spacing, проверяем стиль параграфа
+                    if para.style and para.style.paragraph_format:
+                        fmt = para.style.paragraph_format
+                        if fmt.line_spacing is not None:
+                            # Конвертируем в twips (1 pt = 20 twips)
+                            actual_spacing = int(fmt.line_spacing * 20)
+                
+                if actual_spacing is not None:
+                    expected_figure_spacing = 240  # 1.0 интервал
+                    if abs(actual_spacing - expected_figure_spacing) > 20:
+                        errors.append(ReportError(
+                            id=f"Т-10-spacing-{next_idx}",
+                            code="Т-10",
+                            type="formatting",
+                            severity="error",
+                            location=ErrorLocation(
+                                paragraph_index=next_idx,
+                                structural_path=f"Подпись рисунка {fig_idx + 1}"
+                            ),
+                            fragment=para_text[:100],
+                            rule="Интервал в названии рисунка должен быть 1.0 (240 twips)",
+                            rule_citation="§4.4, с. 50-52",
+                            found_value=str(actual_spacing),
+                            expected_value=str(expected_figure_spacing),
+                            recommendation="Установите межстрочный интервал 1.0"
+                        ))
                 
                 break
             
@@ -1372,18 +1403,34 @@ def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
             legend_idx, legend_element, legend_text = conditional_legend_para
             
             # Проверяем размер шрифта (12 пт)
-            for t in legend_element.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}r'):
+            # Ищем w:sz или w:szCs (для комплексного шрифта)
+            font_size_found = False
+            for t in legend_element.iter(qn('w:r')):
                 rPr = t.find(qn('w:rPr'))
                 font_size = None
                 if rPr is not None:
+                    # Проверяем w:sz
                     sz_el = rPr.find(qn('w:sz'))
                     if sz_el is not None:
                         val = sz_el.get(qn('w:val'))
                         if val is not None:
                             try:
                                 font_size = int(val) / 2.0
+                                font_size_found = True
                             except ValueError:
                                 pass
+                    
+                    # Если w:sz не найден, проверяем w:szCs
+                    if font_size is None:
+                        szcs_el = rPr.find(qn('w:szCs'))
+                        if szcs_el is not None:
+                            val = szcs_el.get(qn('w:val'))
+                            if val is not None:
+                                try:
+                                    font_size = int(val) / 2.0
+                                    font_size_found = True
+                                except ValueError:
+                                    pass
                 
                 if font_size is not None and font_size != 12:
                     errors.append(ReportError(
@@ -1403,6 +1450,25 @@ def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
                         recommendation="Установите размер шрифта 12 пт"
                     ))
                     break
+            
+            # Если размер шрифта не найден ни в одном элементе, это тоже ошибка
+            if not font_size_found:
+                errors.append(ReportError(
+                    id=f"Т-9-font-size-missing-{legend_idx}",
+                    code="Т-9",
+                    type="formatting",
+                    severity="error",
+                    location=ErrorLocation(
+                        paragraph_index=legend_idx,
+                        structural_path=f"Условные обозначения рисунка {fig_idx + 1}"
+                    ),
+                    fragment=legend_text[:100],
+                    rule="Условные обозначения должны быть 12 пт",
+                    rule_citation="§4.4, с. 50-52",
+                    found_value="размер шрифта не задан",
+                    expected_value="12",
+                    recommendation="Установите размер шрифта 12 пт"
+                ))
     
     # Т-11: Данные не дублируются в таблице и рисунке
     # Сравнить текст в таблице и подписи рисунка (простое предупреждение)
