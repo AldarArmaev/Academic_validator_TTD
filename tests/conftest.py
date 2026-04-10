@@ -125,9 +125,63 @@ def wrong_caption_position_docx():
 
 
 @pytest.fixture
+def wrong_table_title_alignment_docx():
+    """Название таблицы не по центру (нарушение Т-2)."""
+    return FIXTURES_DIR / "tables" / "wrong_T_2_table_title_alignment.docx"
+
+
+@pytest.fixture
+def wrong_table_title_dot_docx():
+    """Название таблицы с точкой в конце (нарушение Т-3)."""
+    return FIXTURES_DIR / "tables" / "wrong_T_3_table_title_dot.docx"
+
+
+@pytest.fixture
 def wrong_table_font_size_docx():
     """Размер шрифта в таблице меньше 14 пт (нарушение Т-4)."""
     return FIXTURES_DIR / "tables" / "wrong_T_4_font_size.docx"
+
+
+@pytest.fixture
+def wrong_table_width_alignment_docx():
+    """Таблица не выровнена по ширине страницы (нарушение Т-5)."""
+    return FIXTURES_DIR / "tables" / "wrong_T_5_table_width_alignment.docx"
+
+
+@pytest.fixture
+def wrong_table_numbering_gap_docx():
+    """Пропуск в нумерации таблиц (нарушение Т-6)."""
+    return FIXTURES_DIR / "tables" / "wrong_T_6_numbering_gap.docx"
+
+
+@pytest.fixture
+def wrong_figure_caption_alignment_docx():
+    """Подпись рисунка не по центру (нарушение Т-7)."""
+    return FIXTURES_DIR / "tables" / "wrong_T_7_figure_caption_alignment.docx"
+
+
+@pytest.fixture
+def wrong_figure_title_capitalization_docx():
+    """Название рисунка с неправильной капитализацией (нарушение Т-8)."""
+    return FIXTURES_DIR / "tables" / "wrong_T_8_figure_title_capitalization.docx"
+
+
+@pytest.fixture
+def wrong_conditional_legend_font_docx():
+    """Шрифт в условных обозначениях меньше 14 пт (нарушение Т-9)."""
+    return FIXTURES_DIR / "tables" / "wrong_T_9_conditional_legend_font.docx"
+
+
+@pytest.fixture
+def wrong_figure_spacing_docx():
+    """Неправильные отступы у рисунков (нарушение Т-10)."""
+    return FIXTURES_DIR / "tables" / "wrong_T_10_figure_spacing.docx"
+
+
+@pytest.fixture
+def wrong_data_duplicate_docx():
+    """Дублирование данных в таблице (нарушение Т-11)."""
+    return FIXTURES_DIR / "tables" / "wrong_T_11_data_duplicate.docx"
 
 
 @pytest.fixture

@@ -16,15 +16,19 @@ htmlcov/
 .env.local
 *.env.*
 
-# Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-
 # Logs
 *.log
 
-# Temp files
+# Temporary files
 *.tmp
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
 ```
