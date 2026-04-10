@@ -1620,20 +1620,29 @@ def validate_references_format(doc: Document, rules: dict[str, Any]) -> list[Rep
             ))
     
     # Л-9: проверка формата автора "Фамилия, И. О."
-    # Русский паттерн: Фамилия, И. О.
-    ru_author_pattern = re.compile(r'^\d+\.\s*[А-ЯЁ][а-яё]+(?:-[А-ЯЁ][а-яё]+)?,\s[А-ЯЁ]\.\s[А-ЯЁ]\.')
-    # Английский паттерн: Surname, I. I.
-    en_author_pattern = re.compile(r'^\d+\.\s*[A-Z][a-z]+(?:-[A-Z][a-z]+)?,\s[A-Z]\.\s[A-Z]\.')
+    # Паттерны для проверки правильного формата автора (только с запятой)
+    author_patterns = [
+        r'[А-ЯЁ][а-яё]+\s*,\s*[А-ЯЁ]\.\s*[А-ЯЁ]\.',  # Иванов, И. И.
+        r'[A-Z][a-z]+\s*,\s*[A-Z]\.\s*[A-Z]\.',     # Ivanov, I. I.
+    ]
+    
+    # Паттерн для определения, начинается ли запись с автора (фамилии)
+    # Автор начинается с заглавной буквы, за которой следуют минимум 2 строчные буквы (фамилия),
+    # затем опционально запятая, пробел и инициал (заглавная буква с точкой)
+    # Это исключает записи типа "Режим доступа", где после слова не идет инициал
+    author_start_pattern = re.compile(r'^(\d+\.\s*)?([А-ЯЁ][а-яё]{2,})\s*,?\s*[А-ЯЁ]\.')
     
     for idx, para_text in enumerate(ref_section_paragraphs):
-        # Пропускаем источники без автора (начинаются с названия, URLs и т.д.)
-        if not re.match(r'^\d+\.\s*[А-ЯЁA-Z]', para_text):
+        # Сначала проверяем, начинается ли запись с автора
+        author_match = author_start_pattern.match(para_text)
+        if not author_match:
+            # Запись не начинается с автора (например, начинается с URL, названия организации и т.д.)
             continue
         
-        ru_match = ru_author_pattern.match(para_text)
-        en_match = en_author_pattern.match(para_text)
+        # Проверяем, соответствует ли текст хотя бы одному из паттернов автора с запятой
+        has_valid_author = any(re.search(pattern, para_text) for pattern in author_patterns)
         
-        if not ru_match and not en_match:
+        if not has_valid_author:
             errors.append(ReportError(
                 id=f"Л-9-author-{idx}",
                 code="Л-9",
