@@ -2316,59 +2316,88 @@ def validate_appendix(doc: Document, rules: dict[str, Any]) -> list[ReportError]
 
 def validate_repeated_references(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
     """
-    Проверяет формат повторных ссылок на источники.
+    Л-2: Повторная ссылка в том же или следующем абзаце должна быть [там же, с. X].
     
-    Л-2: повторная ссылка оформляется как [там же, с. X]
+    Правило применяется ТОЛЬКО когда:
+    - В абзаце есть две или более ссылок на ОДИН источник [N, с. X] и [N, с. Y]
+    - ИЛИ в следующем абзаце сразу же снова идёт ссылка на тот же источник
     """
     errors: list[ReportError] = []
-    
-    # Паттерн для поиска ссылок вида [N] или [N, с. X]
-    ref_pattern = re.compile(r'\[(\d+)(?:,\s*с\.\s*\d+)?\]')
-    
-    # Паттерн для правильной повторной ссылки
-    correct_repeat_pattern = re.compile(r'\[там же(?:,\s*с\.\s*\d+)?\]', re.IGNORECASE)
-    
-    # Паттерн для неправильной повторной ссылки (просто номер без "там же")
-    # Ищем ситуации, где одна и та же ссылка используется несколько раз подряд
-    
-    source_counts: dict[str, list[int]] = {}  # source_number -> [paragraph_indices]
-    
-    for para_idx, para in enumerate(doc.paragraphs):
-        for match in ref_pattern.finditer(para.text):
-            source_num = match.group(1)
-            if source_num not in source_counts:
-                source_counts[source_num] = []
-            source_counts[source_num].append(para_idx)
-    
-    # Проверяем, есть ли источники, которые упоминаются более одного раза
-    # и при этом не используют "там же"
-    for source_num, indices in source_counts.items():
-        if len(indices) > 1:
-            # Этот источник упоминается несколько раз
-            # Проверяем, используется ли "там же" для повторных ссылок
-            for idx in indices[1:]:  # Пропускаем первое упоминание
-                para = doc.paragraphs[idx]
-                # Проверяем, есть ли правильная повторная ссылка
-                if not correct_repeat_pattern.search(para.text):
-                    # Проверяем, есть ли просто номер источника (неправильно для повторной)
-                    if ref_pattern.search(para.text):
-                        errors.append(ReportError(
-                            id=f"Л-2-{idx}-{source_num}",
-                            code="Л-2",
-                            type="formatting",
-                            severity="error",
-                            location=ErrorLocation(
-                                paragraph_index=idx,
-                                structural_path=f"Повторная ссылка на источник {source_num}"
-                            ),
-                            fragment=para.text[:100],
-                            rule="Повторная ссылка должна быть оформлена как [там же, с. X]",
-                            rule_citation="§4.3, с. 49",
-                            found_value=f"[{source_num}]",
-                            expected_value="[там же, с. X]",
-                            recommendation="Используйте форму '[там же, с. X]' для повторных ссылок"
-                        ))
-    
+
+    ref_with_page = re.compile(r'\[(\d+),\s*с\.\s*(\d+)\]')
+    correct_repeat = re.compile(r'\[там же(?:,\s*с\.\s*\d+)?\]', re.IGNORECASE)
+
+    paras = doc.paragraphs
+
+    for para_idx, para in enumerate(paras):
+        text = para.text
+
+        # Случай 1: В одном абзаце два раза один источник с разными страницами
+        refs_in_para: dict[str, list[str]] = {}  # source_num -> [pages]
+        for m in ref_with_page.finditer(text):
+            src = m.group(1)
+            page = m.group(2)
+            refs_in_para.setdefault(src, []).append(page)
+
+        for src, pages in refs_in_para.items():
+            if len(pages) > 1 and not correct_repeat.search(text):
+                # Несколько ссылок на один источник в абзаце без "там же"
+                errors.append(ReportError(
+                    id=f"Л-2-same-para-{para_idx}-{src}",
+                    code="Л-2",
+                    type="formatting",
+                    severity="error",
+                    location=ErrorLocation(
+                        paragraph_index=para_idx,
+                        structural_path=f"Абзац {para_idx + 1}"
+                    ),
+                    fragment=text[:100],
+                    rule="Повторная ссылка на тот же источник в одном абзаце должна быть [там же, с. X]",
+                    rule_citation="§4.3, с. 49",
+                    found_value=f"[{src}, с. {pages[0]}]...[{src}, с. {pages[1]}]",
+                    expected_value=f"[{src}, с. {pages[0]}]...[там же, с. {pages[1]}]",
+                    recommendation="Замените второй [N, с. X] на [там же, с. X]"
+                ))
+
+        # Случай 2: Следующий абзац начинается ссылкой на тот же источник
+        # что и последняя ссылка текущего абзаца — и нет "там же"
+        if para_idx + 1 >= len(paras):
+            continue
+
+        # Последний источник в текущем абзаце
+        last_ref_in_current = None
+        for m in ref_with_page.finditer(text):
+            last_ref_in_current = m.group(1)
+
+        if last_ref_in_current is None:
+            continue
+
+        next_para = paras[para_idx + 1]
+        next_text = next_para.text
+
+        # Если следующий абзац начинается с ссылки на тот же источник
+        first_ref_match = re.match(r'^\s*\[(\d+),\s*с\.\s*\d+\]', next_text)
+        if first_ref_match:
+            first_src_next = first_ref_match.group(1)
+            if (first_src_next == last_ref_in_current
+                    and not correct_repeat.search(next_text)):
+                errors.append(ReportError(
+                    id=f"Л-2-next-para-{para_idx + 1}-{first_src_next}",
+                    code="Л-2",
+                    type="formatting",
+                    severity="error",
+                    location=ErrorLocation(
+                        paragraph_index=para_idx + 1,
+                        structural_path=f"Абзац {para_idx + 2}"
+                    ),
+                    fragment=next_text[:100],
+                    rule="Повторная ссылка в следующем абзаце должна быть [там же, с. X]",
+                    rule_citation="§4.3, с. 49",
+                    found_value=first_ref_match.group(0),
+                    expected_value="[там же, с. X]",
+                    recommendation="Замените ссылку на [там же, с. X] в начале абзаца"
+                ))
+
     return errors
 
 
