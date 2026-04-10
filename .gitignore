@@ -1,36 +1,4 @@
 ```
-# Python
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-
-# Testing
-.pytest_cache/
-.coverage
-coverage/
-
-# Logs
-*.log
-
-# Environment
-.env
-.env.local
-*.env.*
-
-# Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Dependencies
-.venv/
-venv/
-node_modules/
-
-# Build artifacts
-dist/
-build/
-target/
 ```

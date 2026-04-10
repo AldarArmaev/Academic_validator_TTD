@@ -85,6 +85,33 @@ FIXTURE_DESCRIPTIONS: dict[str, str] = {
         "Нарушение Л-7: список литературы содержит менее 40 источников. "
         "Добавьте 20-30 источников вместо требуемых 40+."
     ),
+    "references/wrong_L_4_alphabetical_order.docx": (
+        "Нарушение Л-4: источники в списке расположены не по алфавиту. "
+        "Например: Петров стоит перед Ивановым."
+    ),
+    "references/wrong_L_4_cyrillic_before_latin.docx": (
+        "Нарушение Л-4: иностранный источник (латиница) стоит перед русским. "
+        "Сначала должны идти все русскоязычные, затем иностранные."
+    ),
+    "references/wrong_L_5_numbering.docx": (
+        "Нарушение Л-5: нарушена сплошная нумерация (например 1, 3 вместо 1, 2, 3)."
+    ),
+    "references/wrong_L_8_old_sources.docx": (
+        "Нарушение Л-8: большинство источников старше 10 лет (до 2014 года)."
+    ),
+    "references/wrong_L_9_author_format.docx": (
+        "Нарушение Л-9: автор оформлен без запятой — 'Иванов И.И.' вместо 'Иванов, И. И.'"
+    ),
+    "references/wrong_L_10_url_no_date.docx": (
+        "Нарушение Л-10: URL-источник без даты обращения. "
+        "Добавить: (дата обращения: ДД.ММ.ГГГГ)"
+    ),
+    "references/wrong_L_11_invalid_reference.docx": (
+        "Нарушение Л-11: в тексте есть ссылка [99] на источник которого нет в списке."
+    ),
+    "references/wrong_L_12_hyphen_instead_of_dash.docx": (
+        "Нарушение Л-12: в библиографии используется дефис '-' вместо тире '–'."
+    ),
     "typography/wrong_N_2_initials_space.docx": (
         "Нарушение Н-2: инициалы и фамилия написаны без пробелов: 'И.И.Иванов' "
         "вместо правильного 'И. И. Иванов' (пробелы между инициалами и фамилией)."
@@ -136,7 +163,15 @@ def _get_fixtures_structure() -> dict[str, list[str]]:
         "references": [
             "wrong_L_1_bracket_format.docx",
             "wrong_L_3_multiple_order.docx",
+            "wrong_L_4_alphabetical_order.docx",
+            "wrong_L_4_cyrillic_before_latin.docx",
+            "wrong_L_5_numbering.docx",
             "wrong_L_7_min_sources.docx",
+            "wrong_L_8_old_sources.docx",
+            "wrong_L_9_author_format.docx",
+            "wrong_L_10_url_no_date.docx",
+            "wrong_L_11_invalid_reference.docx",
+            "wrong_L_12_hyphen_instead_of_dash.docx",
         ],
         "typography": [
             "wrong_N_2_initials_space.docx",

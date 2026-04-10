@@ -174,3 +174,45 @@ def wrong_quotes_docx():
 def wrong_abbreviation_docx():
     """Сокращения оформлены неправильно (нарушение Н-6)."""
     return FIXTURES_DIR / "typography" / "wrong_N_6_abbreviation.docx"
+
+
+# ── Дополнительные фикстуры для списка литературы (Л-*) ───────────────────────
+
+@pytest.fixture
+def wrong_L_4_alphabetical_order_docx():
+    return FIXTURES_DIR / "references" / "wrong_L_4_alphabetical_order.docx"
+
+
+@pytest.fixture
+def wrong_L_4_cyrillic_before_latin_docx():
+    return FIXTURES_DIR / "references" / "wrong_L_4_cyrillic_before_latin.docx"
+
+
+@pytest.fixture
+def wrong_L_5_numbering_docx():
+    return FIXTURES_DIR / "references" / "wrong_L_5_numbering.docx"
+
+
+@pytest.fixture
+def wrong_L_8_old_sources_docx():
+    return FIXTURES_DIR / "references" / "wrong_L_8_old_sources.docx"
+
+
+@pytest.fixture
+def wrong_L_9_author_format_docx():
+    return FIXTURES_DIR / "references" / "wrong_L_9_author_format.docx"
+
+
+@pytest.fixture
+def wrong_L_10_url_no_date_docx():
+    return FIXTURES_DIR / "references" / "wrong_L_10_url_no_date.docx"
+
+
+@pytest.fixture
+def wrong_L_11_invalid_reference_docx():
+    return FIXTURES_DIR / "references" / "wrong_L_11_invalid_reference.docx"
+
+
+@pytest.fixture
+def wrong_L_12_hyphen_instead_of_dash_docx():
+    return FIXTURES_DIR / "references" / "wrong_L_12_hyphen_instead_of_dash.docx"
