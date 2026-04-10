@@ -18,24 +18,19 @@ coverage/
 .env.local
 *.env.*
 
-# Dependencies
-.venv/
-venv/
-pip-log.txt
-pip-selfcheck.json
-
-# OS generated files
-.DS_Store
-Thumbs.db
-
 # Editors
 .vscode/
 .idea/
 *.swp
 *.swo
 
+# Dependencies
+.venv/
+venv/
+node_modules/
+
 # Build artifacts
 dist/
 build/
-*.egg-info/
+target/
 ```

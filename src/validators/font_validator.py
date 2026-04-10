@@ -44,7 +44,7 @@ def check_font_formatting(doc: Document, rules: dict[str, Any]) -> list[ReportEr
             font_size_pt = run.font.size.pt if run.font.size else None
             
             # Проверка шрифта
-            if font_name != expected_font:
+            if font_name is not None and font_name != expected_font:
                 error_counter += 1
                 fragment = run.text[:100]
                 errors.append(ReportError(
