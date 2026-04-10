@@ -35,7 +35,15 @@ def rules():
         ],
         "chapter_heading_pattern": "^Глава \\d+\\.\\s.+",
         "tolerances": {"dxa": 20, "pt": 0.5},
-        "references": {"min_sources": 40}
+        "references": {"min_sources": 40},
+        "volume": {
+            "total_chars_min": 90000,
+            "total_chars_max": 108000,
+            "theory_chapter_chars_min": 27000,
+            "theory_chapter_chars_max": 36000,
+            "empirical_chapter_chars_min": 45000,
+            "empirical_chapter_chars_max": 54000
+        },
     }
 
 

@@ -610,3 +610,169 @@ def test_C_1_all_sections_present_no_error(rules, correct_C_1_all_sections_prese
     report = validate_format(str(correct_C_1_all_sections_present_docx), rules)
     errors = [e for e in report.errors if e.code == "С-1"]
     assert len(errors) == 0, f"Ложное срабатывание С-1: {errors}"
+
+
+# =============================================================================
+# Тесты объёма документа (Ф-11, Ф-12, Ф-13)
+# =============================================================================
+
+def test_C_3_each_section_starts_new_page(rules, wrong_C_3_section_no_page_break_docx):
+    """С-3: каждый новый раздел начинается с новой страницы."""
+    from src.validators.format_validator import validate_format
+    report = validate_format(str(wrong_C_3_section_no_page_break_docx), rules)
+    errors = [e for e in report.errors if e.code == "С-3"]
+    assert len(errors) >= 1, "Ошибка С-3 не обнаружена"
+
+
+def test_F_11_total_volume_below_min_error(rules, tmp_path):
+    """Ф-11: общий объём работы ниже минимального порога."""
+    from docx import Document
+    from src.validators.format_validator import validate_format
+    
+    doc = Document()
+    doc.add_heading('Введение', level=1)
+    doc.add_paragraph('Короткий текст.')
+    doc.add_heading('Глава 1. Теория', level=1)
+    doc.add_paragraph('Мало текста.')
+    doc.add_heading('Глава 2. Практика', level=1)
+    doc.add_paragraph('Тоже мало.')
+    doc.add_heading('Заключение', level=1)
+    doc.add_paragraph('Итог.')
+    doc.add_heading('Список литературы', level=1)
+    doc.add_paragraph('1. Книга')
+    
+    path = tmp_path / "small_volume.docx"
+    doc.save(path)
+    
+    report = validate_format(str(path), rules)
+    errors = [e for e in report.errors if e.code == "Ф-11"]
+    assert len(errors) >= 1, "Ошибка Ф-11 (объём ниже минимума) не обнаружена"
+    assert any("below-min" in e.id or int(e.found_value) < 90000 for e in errors)
+
+
+def test_F_11_total_volume_above_max_error(rules, tmp_path):
+    """Ф-11: общий объём работы выше максимального порога."""
+    from docx import Document
+    from src.validators.format_validator import validate_format
+    
+    doc = Document()
+    doc.add_heading('Введение', level=1)
+    doc.add_paragraph('A' * 50000)
+    doc.add_heading('Глава 1. Теория', level=1)
+    doc.add_paragraph('B' * 30000)
+    doc.add_heading('Глава 2. Практика', level=1)
+    doc.add_paragraph('C' * 50000)
+    doc.add_heading('Заключение', level=1)
+    doc.add_paragraph('D' * 10000)
+    doc.add_heading('Список литературы', level=1)
+    doc.add_paragraph('1. Книга')
+    
+    path = tmp_path / "large_volume.docx"
+    doc.save(path)
+    
+    report = validate_format(str(path), rules)
+    errors = [e for e in report.errors if e.code == "Ф-11"]
+    assert len(errors) >= 1, "Ошибка Ф-11 (объём выше максимума) не обнаружена"
+    assert any("above-max" in e.id or int(e.found_value) > 108000 for e in errors)
+
+
+def test_F_11_total_volume_correct_no_error(rules, tmp_path):
+    """Ф-11: общий объём работы в допустимых пределах."""
+    from docx import Document
+    from src.validators.format_validator import validate_format
+    
+    doc = Document()
+    doc.add_heading('Введение', level=1)
+    doc.add_paragraph('A' * 5000)
+    doc.add_heading('Глава 1. Теория', level=1)
+    doc.add_paragraph('B' * 30000)
+    doc.add_heading('Глава 2. Практика', level=1)
+    doc.add_paragraph('C' * 50000)
+    doc.add_heading('Заключение', level=1)
+    doc.add_paragraph('D' * 5000)
+    doc.add_heading('Список литературы', level=1)
+    doc.add_paragraph('1. Книга')
+    
+    path = tmp_path / "correct_volume.docx"
+    doc.save(path)
+    
+    report = validate_format(str(path), rules)
+    errors = [e for e in report.errors if e.code == "Ф-11"]
+    assert len(errors) == 0, f"Ложное срабатывание Ф-11: {errors}"
+
+
+def test_F_12_theory_chapter_volume_error(rules, tmp_path):
+    """Ф-12: объём теоретической главы (Глава 1) вне допустимых пределов."""
+    from docx import Document
+    from src.validators.format_validator import validate_format
+    
+    doc = Document()
+    doc.add_heading('Введение', level=1)
+    doc.add_paragraph('Введение.')
+    doc.add_heading('Глава 1. Теория', level=1)
+    doc.add_paragraph('X' * 20000)  # Ниже минимума 27000
+    doc.add_heading('Глава 2. Практика', level=1)
+    doc.add_paragraph('Y' * 50000)
+    doc.add_heading('Заключение', level=1)
+    doc.add_paragraph('Заключение.')
+    doc.add_heading('Список литературы', level=1)
+    doc.add_paragraph('1. Книга')
+    
+    path = tmp_path / "small_chapter1.docx"
+    doc.save(path)
+    
+    report = validate_format(str(path), rules)
+    errors = [e for e in report.errors if e.code == "Ф-12"]
+    assert len(errors) >= 1, "Ошибка Ф-12 (объём главы 1) не обнаружена"
+
+
+def test_F_13_empirical_chapter_volume_error(rules, tmp_path):
+    """Ф-13: объём эмпирической главы (Глава 2) вне допустимых пределов."""
+    from docx import Document
+    from src.validators.format_validator import validate_format
+    
+    doc = Document()
+    doc.add_heading('Введение', level=1)
+    doc.add_paragraph('Введение.')
+    doc.add_heading('Глава 1. Теория', level=1)
+    doc.add_paragraph('X' * 30000)
+    doc.add_heading('Глава 2. Практика', level=1)
+    doc.add_paragraph('Y' * 40000)  # Ниже минимума 45000
+    doc.add_heading('Заключение', level=1)
+    doc.add_paragraph('Заключение.')
+    doc.add_heading('Список литературы', level=1)
+    doc.add_paragraph('1. Книга')
+    
+    path = tmp_path / "small_chapter2.docx"
+    doc.save(path)
+    
+    report = validate_format(str(path), rules)
+    errors = [e for e in report.errors if e.code == "Ф-13"]
+    assert len(errors) >= 1, "Ошибка Ф-13 (объём главы 2) не обнаружена"
+
+
+def test_volume_chapters_boundaries_correct_no_error(rules, tmp_path):
+    """Ф-11, Ф-12, Ф-13: все объёмы в допустимых пределах."""
+    from docx import Document
+    from src.validators.format_validator import validate_format
+    
+    doc = Document()
+    doc.add_heading('Введение', level=1)
+    doc.add_paragraph('A' * 5000)
+    doc.add_heading('Глава 1. Теория', level=1)
+    doc.add_paragraph('B' * 30000)  # В диапазоне 27000-36000
+    doc.add_heading('Глава 2. Практика', level=1)
+    doc.add_paragraph('C' * 50000)  # В диапазоне 45000-54000
+    doc.add_heading('Заключение', level=1)
+    doc.add_paragraph('D' * 5000)
+    doc.add_heading('Список литературы', level=1)
+    doc.add_paragraph('1. Книга')
+    
+    path = tmp_path / "correct_all_volumes.docx"
+    doc.save(path)
+    
+    report = validate_format(str(path), rules)
+    
+    # Проверяем отсутствие ошибок по объёму
+    volume_errors = [e for e in report.errors if e.code in ("Ф-11", "Ф-12", "Ф-13")]
+    assert len(volume_errors) == 0, f"Ложное срабатывание проверок объёма: {volume_errors}"
