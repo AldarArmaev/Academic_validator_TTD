@@ -2110,189 +2110,207 @@ def validate_toc(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
 
 
 def validate_appendix(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
-    """
-    Проверяет оформление приложений.
-    
-    П-1: приложение начинается с новой страницы
-    П-2: надпись 'Приложение N' в правом верхнем углу
-    П-3: название приложения по центру без точки
-    П-4: порядок приложений соответствует порядку ссылок в тексте
-    """
+    """П-1..П-4: оформление приложений."""
     errors: list[ReportError] = []
-    
-    appendix_pattern = re.compile(r'Приложение\s+([A-ZА-Я\d])', re.IGNORECASE)
-    appendix_ref_pattern = re.compile(r'прил\.\s*\d+', re.IGNORECASE)
-    
-    # Собираем ссылки на приложения из текста (порядок упоминания)
-    appendix_refs_order: list[int] = []
-    full_text = "\n".join([p.text for p in doc.paragraphs])
-    for match in appendix_ref_pattern.finditer(full_text):
-        ref_text = match.group(0)
-        # Извлекаем номер приложения
-        num_match = re.search(r'\d+', ref_text)
-        if num_match:
-            appendix_refs_order.append(int(num_match.group()))
-    
-    # Находим все приложения
-    appendices: list[tuple[int, str, str | None]] = []  # (idx, label, title)
-    
-    for para_idx, para in enumerate(doc.paragraphs):
-        text = para.text.strip()
-        
-        # Проверка на заголовок раздела "Приложения"
-        if para.style and para.style.name == "Heading 1" and "приложен" in text.lower():
+
+    appendix_heading_pattern = re.compile(
+        r'^Приложение\s+([А-ЯЁA-Z\d])\s*$', re.IGNORECASE
+    )
+    # Ссылки в тексте: "(прил. А)", "(прил. 1)", "приложение А"
+    appendix_ref_pattern = re.compile(
+        r'(?:прил\.\s*([А-ЯЁA-Z\d]+)|\bприложени[еяю]\s+([А-ЯЁA-Z\d]+))',
+        re.IGNORECASE
+    )
+
+    def _has_page_break_before(para, para_idx: int) -> bool:
+        """True если перед абзацем есть разрыв страницы."""
+        pPr = para._p.find(qn('w:pPr'))
+        if pPr is not None:
+            pb = pPr.find(qn('w:pageBreakBefore'))
+            if pb is not None:
+                val = pb.get(qn('w:val'))
+                if val is None or val in ('1', 'true', 'on'):
+                    return True
+        if para_idx > 0:
+            prev_para = doc.paragraphs[para_idx - 1]
+            for br in prev_para._p.iter(qn('w:br')):
+                if br.get(qn('w:type')) == 'page':
+                    return True
+        return False
+
+    def _get_alignment(para) -> str | None:
+        pPr = para._p.find(qn('w:pPr'))
+        jc_el = pPr.find(qn('w:jc')) if pPr is not None else None
+        if jc_el is not None:
+            return jc_el.get(qn('w:val'))
+        if para.style and para.style.paragraph_format:
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            fmt = para.style.paragraph_format
+            mapping = {
+                WD_ALIGN_PARAGRAPH.RIGHT: "right",
+                WD_ALIGN_PARAGRAPH.CENTER: "center",
+                WD_ALIGN_PARAGRAPH.LEFT: "left",
+                WD_ALIGN_PARAGRAPH.JUSTIFY: "both",
+            }
+            if fmt.alignment in mapping:
+                return mapping[fmt.alignment]
+        return None
+
+    # Собираем порядок первого упоминания приложений в тексте
+    refs_order: list[str] = []
+    seen_refs: set[str] = set()
+    for para in doc.paragraphs:
+        # Пропускаем сами заголовки приложений
+        if appendix_heading_pattern.match(para.text.strip()):
             continue
-        
-        # Проверка на надпись "Приложение N"
-        app_match = appendix_pattern.match(text)
-        if app_match:
-            app_letter = app_match.group(1)
-            
-            # П-1: проверка разрыва страницы перед приложением
-            pPr = para._p.find(qn('w:pPr'))
-            has_page_break = False
-            
-            if pPr is not None:
-                page_break_before = pPr.find(qn('w:pageBreakBefore'))
-                if page_break_before is not None:
-                    val = page_break_before.get(qn('w:val'))
-                    if val in ('1', 'true', 'on'):
-                        has_page_break = True
-            
-            # Также проверяем предыдущий абзац на разрыв
-            if not has_page_break and para_idx > 0:
-                prev_para = doc.paragraphs[para_idx - 1]
-                prev_pPr = prev_para._p.find(qn('w:pPr'))
-                if prev_pPr is not None:
-                    for br in prev_pPr.findall(qn('w:br')):
-                        br_type = br.get(qn('w:type'))
-                        if br_type == 'page':
-                            has_page_break = True
-                            break
-            
-            if not has_page_break:
+        for m in appendix_ref_pattern.finditer(para.text):
+            letter = (m.group(1) or m.group(2) or "").upper().strip()
+            if letter and letter not in seen_refs:
+                refs_order.append(letter)
+                seen_refs.add(letter)
+
+    # Находим приложения в документе
+    appendices: list[dict] = []  # {idx, letter, title_idx, title}
+
+    i = 0
+    paras = doc.paragraphs
+    while i < len(paras):
+        para = paras[i]
+        m = appendix_heading_pattern.match(para.text.strip())
+        if m:
+            letter = m.group(1).upper()
+            app = {"idx": i, "letter": letter, "title_idx": None, "title": None}
+
+            # П-1: разрыв страницы
+            if not _has_page_break_before(para, i):
                 errors.append(ReportError(
-                    id=f"П-1-{para_idx}",
+                    id=f"П-1-{i}",
                     code="П-1",
                     type="formatting",
                     severity="error",
-                    location=ErrorLocation(
-                        paragraph_index=para_idx,
-                        structural_path=f"Приложение {app_letter}"
-                    ),
-                    fragment=text[:100],
+                    location=ErrorLocation(paragraph_index=i,
+                                           structural_path=f"Приложение {letter}"),
+                    fragment=para.text.strip()[:100],
                     rule="Каждое приложение должно начинаться с новой страницы",
-                    rule_citation="§3.8, с. 44",
+                    rule_citation="§4.6, с. 59",
                     found_value="нет разрыва страницы",
                     expected_value="разрыв страницы перед приложением",
-                    recommendation="Добавьте разрыв страницы перед приложением"
+                    recommendation="Поставьте курсор перед «Приложение» и нажмите Ctrl+Enter"
                 ))
-            
-            # П-2: проверка выравнивания (должно быть справа)
-            jc_el = pPr.find(qn('w:jc')) if pPr else None
-            alignment = jc_el.get(qn('w:val')) if jc_el else None
-            
+
+            # П-2: выравнивание "Приложение N" — должно быть справа
+            alignment = _get_alignment(para)
             if alignment != "right":
                 errors.append(ReportError(
-                    id=f"П-2-{para_idx}",
+                    id=f"П-2-{i}",
                     code="П-2",
                     type="formatting",
                     severity="error",
-                    location=ErrorLocation(
-                        paragraph_index=para_idx,
-                        structural_path=f"Приложение {app_letter}"
-                    ),
-                    fragment=text[:100],
-                    rule="Надпись 'Приложение N' должна быть выровнена по правому краю",
-                    rule_citation="§3.8, с. 44",
+                    location=ErrorLocation(paragraph_index=i,
+                                           structural_path=f"Приложение {letter}"),
+                    fragment=para.text.strip()[:100],
+                    rule="Надпись «Приложение N» должна быть выровнена по правому краю",
+                    rule_citation="§4.6, с. 59",
                     found_value=alignment or "не задано",
                     expected_value="right",
-                    recommendation="Установите выравнивание по правому краю для надписи приложения"
+                    recommendation="Выделите строку «Приложение N» → Главная → Выровнять по правому краю"
                 ))
-            
-            appendices.append((para_idx, app_letter, None))
-            continue
-        
-        # Проверка на название приложения (следующий абзац после "Приложение N")
-        if appendices and appendices[-1][2] is None:
-            # Это может быть название приложения
-            if para.style and para.style.name in ("Heading 2", "Normal"):
-                # П-3: проверка названия (по центру, без точки)
-                pPr = para._p.find(qn('w:pPr'))
-                jc_el = pPr.find(qn('w:jc')) if pPr else None
-                alignment = jc_el.get(qn('w:val')) if jc_el else None
-                
-                has_period = text.endswith('.')
-                
-                if alignment != "center":
-                    errors.append(ReportError(
-                        id=f"П-3-align-{para_idx}",
-                        code="П-3",
-                        type="formatting",
-                        severity="error",
-                        location=ErrorLocation(
-                            paragraph_index=para_idx,
-                            structural_path=f"Название приложения"
-                        ),
-                        fragment=text[:100],
-                        rule="Название приложения должно быть выровнено по центру",
-                        rule_citation="§3.8, с. 44",
-                        found_value=alignment or "не задано",
-                        expected_value="center",
-                        recommendation="Установите выравнивание по центру для названия приложения"
-                    ))
-                
-                if has_period:
-                    errors.append(ReportError(
-                        id=f"П-3-period-{para_idx}",
-                        code="П-3",
-                        type="formatting",
-                        severity="error",
-                        location=ErrorLocation(
-                            paragraph_index=para_idx,
-                            structural_path=f"Название приложения"
-                        ),
-                        fragment=text[:100],
-                        rule="В конце названия приложения не должно быть точки",
-                        rule_citation="§3.8, с. 44",
-                        found_value=text[-10:] if len(text) > 10 else text,
-                        expected_value="без точки",
-                        recommendation="Удалите точку в конце названия приложения"
-                    ))
-                
-                # Обновляем последнее приложение с названием
-                appendices[-1] = (appendices[-1][0], appendices[-1][1], text)
-    
-    # П-4: проверка порядка приложений
-    if len(appendices) > 1 and appendix_refs_order:
-        # Сравниваем порядок приложений в документе с порядком ссылок
-        app_letters_in_doc = [app[1] for app in appendices]
-        
-        # Преобразуем номера ссылок в буквы (1->A, 2->B, etc.)
-        expected_order = []
-        for num in appendix_refs_order:
-            if num <= 26:  # A-Z
-                expected_order.append(chr(ord('А') + num - 1) if num <= 6 else chr(ord('A') + num - 7))
-        
-        # Простая проверка: если порядок не совпадает
-        if len(app_letters_in_doc) != len(set(app_letters_in_doc)):
+
+            # Ищем название приложения — следующий непустой абзац
+            j = i + 1
+            while j < len(paras) and not paras[j].text.strip():
+                j += 1
+
+            if j < len(paras):
+                next_para = paras[j]
+                next_text = next_para.text.strip()
+                # Это название если не является другим "Приложение X" и не H1
+                is_another_app = bool(appendix_heading_pattern.match(next_text))
+                is_h1 = next_para.style and next_para.style.name == "Heading 1"
+
+                if not is_another_app and not is_h1 and next_text:
+                    app["title_idx"] = j
+                    app["title"] = next_text
+
+                    # П-3а: выравнивание названия — центр
+                    title_align = _get_alignment(next_para)
+                    if title_align != "center":
+                        errors.append(ReportError(
+                            id=f"П-3-align-{j}",
+                            code="П-3",
+                            type="formatting",
+                            severity="error",
+                            location=ErrorLocation(paragraph_index=j,
+                                                   structural_path=f"Название приложения {letter}"),
+                            fragment=next_text[:100],
+                            rule="Название приложения должно быть выровнено по центру",
+                            rule_citation="§4.6, с. 59",
+                            found_value=title_align or "не задано",
+                            expected_value="center",
+                            recommendation="Выделите название → Главная → По центру"
+                        ))
+
+                    # П-3б: нет точки в конце
+                    if next_text.endswith('.'):
+                        errors.append(ReportError(
+                            id=f"П-3-dot-{j}",
+                            code="П-3",
+                            type="formatting",
+                            severity="error",
+                            location=ErrorLocation(paragraph_index=j,
+                                                   structural_path=f"Название приложения {letter}"),
+                            fragment=next_text[:100],
+                            rule="Название приложения не должно заканчиваться точкой",
+                            rule_citation="§4.6, с. 59",
+                            found_value=next_text[-10:],
+                            expected_value="без точки в конце",
+                            recommendation="Удалите точку в конце названия приложения"
+                        ))
+
+            appendices.append(app)
+        i += 1
+
+    # П-4: порядок приложений соответствует порядку ссылок
+    if refs_order and appendices:
+        app_letters_in_doc = [a["letter"] for a in appendices]
+        # Фильтруем refs_order — оставляем только те буквы, которые реально есть
+        filtered_refs = [r for r in refs_order if r in app_letters_in_doc]
+
+        # Проверяем что порядок приложений в документе совпадает с порядком упоминания
+        if filtered_refs and filtered_refs != app_letters_in_doc[:len(filtered_refs)]:
             errors.append(ReportError(
-                id="П-4-duplicate",
+                id="П-4-order",
                 code="П-4",
                 type="formatting",
                 severity="error",
-                location=ErrorLocation(
-                    paragraph_index=appendices[0][0],
-                    structural_path="Приложения"
-                ),
-                fragment="Приложения",
-                rule="Порядок приложений должен соответствовать порядку ссылок в тексте",
-                rule_citation="§3.8, с. 44",
-                found_value=f"порядок: {', '.join(app_letters_in_doc)}",
-                expected_value="порядок согласно ссылкам в тексте",
-                recommendation="Расположите приложения в порядке упоминания в тексте"
+                location=ErrorLocation(paragraph_index=appendices[0]["idx"],
+                                       structural_path="Приложения"),
+                fragment=f"Порядок в документе: {', '.join(app_letters_in_doc)}",
+                rule="Приложения нумеруются в порядке упоминания в тексте",
+                rule_citation="§4.6, с. 59",
+                found_value=f"в документе: {', '.join(app_letters_in_doc)}",
+                expected_value=f"по порядку ссылок: {', '.join(filtered_refs)}",
+                recommendation="Переставьте приложения в порядке их упоминания в тексте"
             ))
-    
+        
+        # Также проверяем что все ссылки на приложения соответствуют реальным приложениям
+        missing_apps = [r for r in refs_order if r not in app_letters_in_doc]
+        if missing_apps:
+            errors.append(ReportError(
+                id="П-4-missing",
+                code="П-4",
+                type="formatting",
+                severity="error",
+                location=ErrorLocation(paragraph_index=appendices[0]["idx"],
+                                       structural_path="Приложения"),
+                fragment=f"Отсутствуют приложения: {', '.join(missing_apps)}",
+                rule="Все упомянутые в тексте приложения должны присутствовать в документе",
+                rule_citation="§4.6, с. 59",
+                found_value=f"приложения {', '.join(missing_apps)} отсутствуют",
+                expected_value=f"приложения {', '.join(missing_apps)} должны быть в документе",
+                recommendation="Добавьте отсутствующие приложения или исправьте ссылки в тексте"
+            ))
+
     return errors
 
 
