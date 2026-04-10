@@ -75,36 +75,45 @@ def wrong_para_spacing_docx():
     return FIXTURES_DIR / "formatting" / "wrong_F_6_para_spacing.docx"
 
 
-# ── Фикстуры для тестов структуры (С-*) ───────────────────────────────────────
-
 @pytest.fixture
 def wrong_missing_conclusion_docx():
-    """Отсутствует раздел Заключение (нарушение С-1)."""
     return FIXTURES_DIR / "structure" / "wrong_C_1_missing_conclusion.docx"
 
+@pytest.fixture
+def wrong_C_2_appendix_no_reference_docx():
+    return FIXTURES_DIR / "structure" / "wrong_C_2_appendix_no_reference.docx"
+
+@pytest.fixture
+def wrong_C_3_section_no_page_break_docx():
+    return FIXTURES_DIR / "structure" / "wrong_C_3_section_no_page_break.docx"
+
+@pytest.fixture
+def wrong_C_4_paragraph_with_page_break_docx():
+    return FIXTURES_DIR / "structure" / "wrong_C_4_paragraph_with_page_break.docx"
 
 @pytest.fixture
 def wrong_chapter_name_docx():
-    """Заголовок главы без слова Глава (нарушение С-5)."""
     return FIXTURES_DIR / "structure" / "wrong_C_5_chapter_name.docx"
 
+@pytest.fixture
+def wrong_C_6_paragraph_numbering_docx():
+    return FIXTURES_DIR / "structure" / "wrong_C_6_paragraph_numbering.docx"
 
 @pytest.fixture
 def wrong_bold_heading_docx():
-    """Заголовок не жирным шрифтом (нарушение С-7)."""
     return FIXTURES_DIR / "structure" / "wrong_C_7_bold_heading.docx"
-
 
 @pytest.fixture
 def wrong_heading_alignment_docx():
-    """Неправильное выравнивание заголовка (нарушение С-8)."""
     return FIXTURES_DIR / "structure" / "wrong_C_8_heading_alignment.docx"
-
 
 @pytest.fixture
 def wrong_heading_period_docx():
-    """Точка в конце заголовка (нарушение С-9)."""
     return FIXTURES_DIR / "structure" / "wrong_C_9_heading_period.docx"
+
+@pytest.fixture
+def wrong_C_10_subheading_in_paragraph_docx():
+    return FIXTURES_DIR / "structure" / "wrong_C_10_subheading_in_paragraph.docx"
 
 
 # ── Фикстуры для тестов таблиц (Т-*) ──────────────────────────────────────────

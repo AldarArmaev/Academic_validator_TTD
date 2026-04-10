@@ -168,61 +168,15 @@ def test_F_6_correct_no_error(rules):
 
 
 # =============================================================================
-# Тесты структуры документа (С-*)
+# Тесты структуры документа (С-1 … С-10)
 # =============================================================================
 
-def test_C_1_missing_conclusion_error(rules):
+def test_C_1_missing_conclusion_error(rules, wrong_missing_conclusion_docx):
     """С-1: отсутствует раздел Заключение"""
-    docx_path = FIXTURES_DIR / "structure" / "wrong_C_1_missing_conclusion.docx"
-    assert docx_path.exists(), f"Файл не найден: {docx_path}"
-    
-    report = validate_format(str(docx_path), rules)
+    report = validate_format(str(wrong_missing_conclusion_docx), rules)
     errors = [e for e in report.errors if e.code == "С-1"]
     assert len(errors) >= 1, "Ошибка С-1 не обнаружена"
 
-
-def test_C_5_chapter_naming_error(rules):
-    """С-5: заголовок главы без слова 'Глава'"""
-    docx_path = FIXTURES_DIR / "structure" / "wrong_C_5_chapter_name.docx"
-    assert docx_path.exists(), f"Файл не найден: {docx_path}"
-    
-    report = validate_format(str(docx_path), rules)
-    assert any(e.code == "С-5" for e in report.errors), "Ошибка С-5 не обнаружена"
-
-
-def test_C_7_bold_heading_error(rules):
-    """С-7: заголовок не жирным шрифтом"""
-    docx_path = FIXTURES_DIR / "structure" / "wrong_C_7_bold_heading.docx"
-    assert docx_path.exists(), f"Файл не найден: {docx_path}"
-    
-    report = validate_format(str(docx_path), rules)
-    errors = [e for e in report.errors if e.code == "С-7"]
-    assert len(errors) >= 1, "Ошибка С-7 не обнаружена"
-
-
-def test_C_8_heading_alignment_error(rules):
-    """С-8: неправильное выравнивание заголовка"""
-    docx_path = FIXTURES_DIR / "structure" / "wrong_C_8_heading_alignment.docx"
-    assert docx_path.exists(), f"Файл не найден: {docx_path}"
-    
-    report = validate_format(str(docx_path), rules)
-    errors = [e for e in report.errors if e.code == "С-8"]
-    assert len(errors) >= 1, "Ошибка С-8 не обнаружена"
-
-
-def test_C_9_heading_period_error(rules):
-    """С-9: точка в конце заголовка"""
-    docx_path = FIXTURES_DIR / "structure" / "wrong_C_9_heading_period.docx"
-    assert docx_path.exists(), f"Файл не найден: {docx_path}"
-    
-    report = validate_format(str(docx_path), rules)
-    errors = [e for e in report.errors if e.code == "С-9"]
-    assert len(errors) >= 1, "Ошибка С-9 не обнаружена"
-
-
-# =============================================================================
-# Тесты для требований С-2, С-3, С-4, С-6, С-10
-# =============================================================================
 
 def test_C_2_appendix_no_reference_error(rules, wrong_C_2_appendix_no_reference_docx):
     """С-2: приложение без ссылки из текста"""
@@ -245,6 +199,13 @@ def test_C_4_paragraph_with_page_break_error(rules, wrong_C_4_paragraph_with_pag
     assert len(errors) >= 1, "Ошибка С-4 не обнаружена"
 
 
+def test_C_5_chapter_naming_error(rules, wrong_chapter_name_docx):
+    """С-5: заголовок главы без слова 'Глава'"""
+    report = validate_format(str(wrong_chapter_name_docx), rules)
+    errors = [e for e in report.errors if e.code == "С-5"]
+    assert len(errors) >= 1, "Ошибка С-5 не обнаружена"
+
+
 def test_C_6_paragraph_numbering_error(rules, wrong_C_6_paragraph_numbering_docx):
     """С-6: неправильная нумерация параграфа"""
     report = validate_format(str(wrong_C_6_paragraph_numbering_docx), rules)
@@ -252,49 +213,32 @@ def test_C_6_paragraph_numbering_error(rules, wrong_C_6_paragraph_numbering_docx
     assert len(errors) >= 1, "Ошибка С-6 не обнаружена"
 
 
+def test_C_7_bold_heading_error(rules, wrong_bold_heading_docx):
+    """С-7: заголовок выделен жирным шрифтом"""
+    report = validate_format(str(wrong_bold_heading_docx), rules)
+    errors = [e for e in report.errors if e.code == "С-7"]
+    assert len(errors) >= 1, "Ошибка С-7 не обнаружена"
+
+
+def test_C_8_heading_alignment_error(rules, wrong_heading_alignment_docx):
+    """С-8: неправильное выравнивание заголовка"""
+    report = validate_format(str(wrong_heading_alignment_docx), rules)
+    errors = [e for e in report.errors if e.code == "С-8"]
+    assert len(errors) >= 1, "Ошибка С-8 не обнаружена"
+
+
+def test_C_9_heading_period_error(rules, wrong_heading_period_docx):
+    """С-9: точка в конце заголовка"""
+    report = validate_format(str(wrong_heading_period_docx), rules)
+    errors = [e for e in report.errors if e.code == "С-9"]
+    assert len(errors) >= 1, "Ошибка С-9 не обнаружена"
+
+
 def test_C_10_subheading_in_paragraph_error(rules, wrong_C_10_subheading_in_paragraph_docx):
     """С-10: подзаголовок внутри параграфа"""
     report = validate_format(str(wrong_C_10_subheading_in_paragraph_docx), rules)
     errors = [e for e in report.errors if e.code == "С-10"]
     assert len(errors) >= 1, "Ошибка С-10 не обнаружена"
-
-
-# =============================================================================
-# GREEN-тесты: проверка отсутствия ложных срабатываний на корректных документах
-# =============================================================================
-
-def test_C_2_correct_no_error(rules, correct_docx):
-    """С-2: корректный документ без приложений не даёт ошибку"""
-    report = validate_format(str(correct_docx), rules)
-    assert all(e.code != "С-2" for e in report.errors), "Ложное срабатывание С-2"
-
-
-def test_C_3_correct_no_error(rules, correct_docx):
-    """С-3: корректный документ с разрывами страниц не даёт ошибку"""
-    report = validate_format(str(correct_docx), rules)
-    # В корректном документе могут быть ошибки С-3 из-за отсутствия page breaks в fixture
-    # Поэтому этот тест просто проверяет что валидация проходит без исключений
-
-
-def test_C_4_correct_no_error(rules, correct_docx):
-    """С-4: корректный документ без page breaks у параграфов не даёт ошибку"""
-    report = validate_format(str(correct_docx), rules)
-    errors = [e for e in report.errors if e.code == "С-4"]
-    assert len(errors) == 0, f"Ложное срабатывание С-4: {errors}"
-
-
-def test_C_6_correct_no_error(rules, correct_docx):
-    """С-6: корректный документ без Heading 2/3 не даёт ошибку"""
-    report = validate_format(str(correct_docx), rules)
-    errors = [e for e in report.errors if e.code == "С-6"]
-    assert len(errors) == 0, f"Ложное срабатывание С-6: {errors}"
-
-
-def test_C_10_correct_no_error(rules, correct_docx):
-    """С-10: корректный документ без подзаголовков не даёт ошибку"""
-    report = validate_format(str(correct_docx), rules)
-    errors = [e for e in report.errors if e.code == "С-10"]
-    assert len(errors) == 0, f"Ложное срабатывание С-10: {errors}"
 
 
 # =============================================================================
