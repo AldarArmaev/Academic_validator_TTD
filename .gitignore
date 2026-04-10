@@ -1,4 +1,4 @@
 ```
-# Test fixtures - Office documents
-tests/fixtures/**/*.docx
+__pycache__/
+*.pyc
 ```

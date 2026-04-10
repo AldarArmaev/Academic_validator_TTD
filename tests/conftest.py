@@ -24,7 +24,15 @@ def rules():
             "space_after_twips": 0
         },
         "margins_dxa": {"left": 1701, "right": 567, "top": 1134, "bottom": 1134},
-        "required_sections": ["введение", "заключение", "список литературы"],
+        "required_sections": [
+            "титульный лист",
+            "содержание",
+            "введение",
+            "Глава 1",
+            "Глава 2",
+            "заключение",
+            "список литературы"
+        ],
         "chapter_heading_pattern": "^Глава \\d+\\.\\s.+",
         "tolerances": {"dxa": 20, "pt": 0.5},
         "references": {"min_sources": 40}
