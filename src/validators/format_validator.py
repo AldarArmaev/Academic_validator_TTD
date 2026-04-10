@@ -395,8 +395,16 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
                 page_break_before = pPr.find(qn('w:pageBreakBefore'))
                 if page_break_before is not None:
                     val = page_break_before.get(qn('w:val'))
-                    if val in ('1', 'true', 'on'):
+                    # Если атрибут val отсутствует или имеет значение '1', 'true', 'on' - это разрыв
+                    if val is None or val in ('1', 'true', 'on'):
                         has_page_break = True
+            
+            # Также проверяем w:lastRenderedPageBreak как индикатор разрыва страницы
+            # (Word может использовать этот элемент для отображения разрывов)
+            if not has_page_break:
+                xml_str = str(para._p.xml)
+                if '<w:lastRenderedPageBreak' in xml_str:
+                    has_page_break = True
             
             if has_page_break:
                 errors.append(ReportError(
