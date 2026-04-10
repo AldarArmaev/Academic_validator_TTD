@@ -547,3 +547,66 @@ def test_L_2_repeated_ref_format_error(rules, wrong_L_2_repeated_ref_format_docx
     report = validate_format(str(wrong_L_2_repeated_ref_format_docx), rules)
     errors = [e for e in report.errors if e.code == "Л-2"]
     assert len(errors) >= 1, "Ошибка Л-2 не обнаружена"
+
+
+# =============================================================================
+# Тесты структуры документа (С-1) - проверка обязательных разделов
+# =============================================================================
+
+def test_C_1_missing_title_page_error(rules, wrong_C_1_missing_title_page_docx):
+    """С-1: отсутствует раздел Титульный лист"""
+    from src.validators.format_validator import validate_format
+    report = validate_format(str(wrong_C_1_missing_title_page_docx), rules)
+    errors = [e for e in report.errors if e.code == "С-1"]
+    # Проверяем что есть ошибка о недостающем разделе
+    assert len(errors) >= 1, "Ошибка С-1 не обнаружена"
+
+
+def test_C_1_missing_table_of_contents_error(rules, wrong_C_1_missing_table_of_contents_docx):
+    """С-1: отсутствует раздел Содержание"""
+    from src.validators.format_validator import validate_format
+    report = validate_format(str(wrong_C_1_missing_table_of_contents_docx), rules)
+    errors = [e for e in report.errors if e.code == "С-1"]
+    assert len(errors) >= 1, "Ошибка С-1 не обнаружена"
+
+
+def test_C_1_missing_introduction_error(rules, wrong_C_1_missing_introduction_docx):
+    """С-1: отсутствует раздел Введение"""
+    from src.validators.format_validator import validate_format
+    report = validate_format(str(wrong_C_1_missing_introduction_docx), rules)
+    errors = [e for e in report.errors if e.code == "С-1"]
+    assert len(errors) >= 1, "Ошибка С-1 не обнаружена"
+
+
+def test_C_1_missing_chapter1_error(rules, wrong_C_1_missing_chapter1_docx):
+    """С-1: отсутствует Глава 1"""
+    from src.validators.format_validator import validate_format
+    report = validate_format(str(wrong_C_1_missing_chapter1_docx), rules)
+    errors = [e for e in report.errors if e.code == "С-1"]
+    # Глава 1 должна быть обнаружена как отсутствующая
+    assert len(errors) >= 1, "Ошибка С-1 не обнаружена"
+
+
+def test_C_1_missing_chapter2_error(rules, wrong_C_1_missing_chapter2_docx):
+    """С-1: отсутствует Глава 2"""
+    from src.validators.format_validator import validate_format
+    report = validate_format(str(wrong_C_1_missing_chapter2_docx), rules)
+    errors = [e for e in report.errors if e.code == "С-1"]
+    # Глава 2 должна быть обнаружена как отсутствующая
+    assert len(errors) >= 1, "Ошибка С-1 не обнаружена"
+
+
+def test_C_1_missing_references_error(rules, wrong_C_1_missing_references_docx):
+    """С-1: отсутствует раздел Список литературы"""
+    from src.validators.format_validator import validate_format
+    report = validate_format(str(wrong_C_1_missing_references_docx), rules)
+    errors = [e for e in report.errors if e.code == "С-1"]
+    assert len(errors) >= 1, "Ошибка С-1 не обнаружена"
+
+
+def test_C_1_all_sections_present_no_error(rules, correct_C_1_all_sections_present_docx):
+    """С-1: все разделы присутствуют - ошибок нет"""
+    from src.validators.format_validator import validate_format
+    report = validate_format(str(correct_C_1_all_sections_present_docx), rules)
+    errors = [e for e in report.errors if e.code == "С-1"]
+    assert len(errors) == 0, f"Ложное срабатывание С-1: {errors}"
