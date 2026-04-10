@@ -5,38 +5,38 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Build artifacts
-build/
-dist/
-*.egg-info/
+# Compiled and build artifacts
+*.o
+*.obj
+*.so
+*.a
+*.dll
+*.exe
+*.out
 
-# Virtual environments
-venv/
+# Dependencies
 .venv/
-env/
-.ENV/
+venv/
+node_modules/
+.mypy_cache/
+.pytest_cache/
 
-# Testing
-.coverage
-htmlcov/
-.coverage.*
-.nosetests.xml
-coverage.xml
-*.cover
-
-# Logs
+# Logs and temp files
 *.log
+*.tmp
+*.swp
 
-# Environment variables
-.env
-.env.local
-.env.*
-!.env.example
-
-# IDE specific
+# Editors
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
 ```

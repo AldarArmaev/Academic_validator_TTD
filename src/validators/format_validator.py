@@ -1594,13 +1594,34 @@ def validate_references_format(doc: Document, rules: dict[str, Any]) -> list[Rep
     # Л-5: проверка сплошной нумерации (1, 2, 3, ...)
     numbering_pattern = re.compile(r'^(\d+)\.')
     source_numbers = []
+    has_numbering = False
+    
     for idx, para_text in enumerate(ref_section_paragraphs):
         match = numbering_pattern.match(para_text)
         if match:
             source_numbers.append(int(match.group(1)))
+            has_numbering = True
     
-    # Проверка непрерывности нумерации
-    if source_numbers:
+    # Если нумерации нет вообще - это ошибка
+    if not has_numbering and len(ref_section_paragraphs) > 0:
+        errors.append(ReportError(
+            id="Л-5-no-numbering",
+            code="Л-5",
+            type="formatting",
+            severity="error",
+            location=ErrorLocation(
+                paragraph_index=ref_section_start_idx,
+                structural_path="Список литературы"
+            ),
+            fragment=ref_section_paragraphs[0][:100] if ref_section_paragraphs else "Список литературы",
+            rule="Источники в списке литературы должны иметь сквозную нумерацию: 1, 2, 3, ...",
+            rule_citation="§4.5, с. 52",
+            found_value="нумерация отсутствует",
+            expected_value="1, 2, 3, ...",
+            recommendation="Добавьте нумерацию к каждому источнику"
+        ))
+    elif source_numbers:
+        # Проверка непрерывности нумерации
         expected_numbers = list(range(1, len(source_numbers) + 1))
         for i, (actual, expected) in enumerate(zip(source_numbers, expected_numbers)):
             if actual != expected:
@@ -1992,8 +2013,25 @@ def validate_toc(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
             if para.text.strip():
                 toc_paragraphs.append(para.text.strip())
     
+    # Если содержания нет вообще - это ошибка Со-1
     if toc_start_idx is None:
-        # Нет содержания вообще
+        if headings_in_doc:
+            errors.append(ReportError(
+                id="Со-1-no-toc",
+                code="Со-1",
+                type="formatting",
+                severity="error",
+                location=ErrorLocation(
+                    paragraph_index=0,
+                    structural_path="Структура документа"
+                ),
+                fragment="Документ не содержит раздела \"Содержание\"",
+                rule="Документ должен содержать содержание со всеми заголовками и номерами страниц",
+                rule_citation="§3.4, с. 43",
+                found_value="содержание отсутствует",
+                expected_value="раздел \"Содержание\" с перечнем всех заголовков",
+                recommendation="Добавьте раздел \"Содержание\" в начало документа"
+            ))
         return errors
     
     # Проверяем, что все заголовки из документа есть в содержании
