@@ -1,0 +1,61 @@
+{
+  "font": {
+    "family": "Times New Roman",
+    "size_half_points": 28,
+    "size_pt": 14
+  },
+  "paragraph": {
+    "line_spacing_twips": 420,
+    "line_spacing_rule": "auto",
+    "first_line_indent_dxa": 720,
+    "first_line_indent_cm": 1.25,
+    "alignment": "both",
+    "space_before_twips": 0,
+    "space_after_twips": 0
+  },
+  "margins_dxa": {
+    "left": 1701,
+    "right": 567,
+    "top": 1134,
+    "bottom": 1134
+  },
+  "margins_cm": {
+    "left": 3.0,
+    "right": 1.0,
+    "top": 2.0,
+    "bottom": 2.0
+  },
+  "volume": {
+    "total_chars_min": 90000,
+    "total_chars_max": 108000,
+    "theory_chapter_chars_min": 27000,
+    "theory_chapter_chars_max": 36000,
+    "empirical_chapter_chars_min": 45000,
+    "empirical_chapter_chars_max": 54000
+  },
+  "references": {
+    "min_sources": 40,
+    "max_years_old": 10,
+    "inline_pattern": "\\[\\d+(?:,\\s*с\\.\\s*\\d+)?\\]",
+    "multi_ref_pattern": "\\[\\d+(?:;\\s*\\d+)+\\]",
+    "repeated_ref_pattern": "\\[там же(?:,\\s*с\\.\\s*\\d+)?\\]"
+  },
+  "table_font": {
+    "size_pt_normal": 12,
+    "size_pt_min": 11,
+    "line_spacing_twips": 240
+  },
+  "required_sections": [
+    "введение",
+    "заключение",
+    "список литературы"
+  ],
+  "chapter_heading_pattern": "^Глава \\d+\\.\\s.+",
+  "paragraph_heading_pattern": "^\\d+\\.\\d+(\\.\\d+)?\\s.+",
+  "stop_words_style": ["я ", "мне ", "мой ", "моя "],
+  "stop_words_colloquial": ["короче", "вообще-то", "на самом деле", "типа", "как бы"],
+  "tolerances": {
+    "dxa": 20,
+    "pt": 0.5
+  }
+}
