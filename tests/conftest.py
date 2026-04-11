@@ -24,6 +24,7 @@ def rules():
             "space_after_twips": 0
         },
         "margins_dxa": {"left": 1701, "right": 567, "top": 1134, "bottom": 1134},
+        "margins_cm": {"left": 3.0, "right": 1.0, "top": 2.0, "bottom": 2.0},
         "required_sections": [
             "титульный лист",
             "содержание",
@@ -33,7 +34,8 @@ def rules():
             "заключение",
             "список литературы"
         ],
-        "chapter_heading_pattern": "^Глава \\d+\\.\\s.+",
+        "chapter_heading_pattern": "^Глава\\s+(?:\\d+|[IVX]+)[.:]?\\s.+",
+        "paragraph_heading_pattern": "^\\d+\\.\\d+\\.?(?:\\.\\d+\\.?)?\\s.+",
         "tolerances": {"dxa": 20, "pt": 0.5},
         "references": {"min_sources": 40},
         "volume": {

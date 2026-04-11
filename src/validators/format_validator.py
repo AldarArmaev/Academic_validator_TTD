@@ -24,12 +24,13 @@ HEADING_STYLES = {
 SERVICE_TITLES = [
     "введение", "заключение", "список литературы",
     "содержание", "оглавление", "библиографический список",
+    "выводы",
 ]
 
-# Паттерн главы: «Глава 1. …»
-CHAPTER_HEADING_PATTERN = r"^Глава\s+\d+[.:]?\s+.+"
+# Паттерн главы: «Глава 1. …» или «Глава I. …» (арабские или римские цифры)
+CHAPTER_HEADING_PATTERN = r"^Глава\s+(?:\d+|[IVX]+)[.:]?\s.+"
 # Паттерн параграфа — точка после цифр необязательна: «2.1 Описание» и «2.1. Описание»
-PARAGRAPH_HEADING_PATTERN = r"^\d+\.\d+\.?(?:\.\d+\.?)?\s+.+"
+PARAGRAPH_HEADING_PATTERN = r"^\d+\.\d+\.?(?:\.\d+\.?)?\s.+"
 
 
 def _is_heading_paragraph(para,
@@ -208,8 +209,9 @@ def check_margins(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
     errors: list[ReportError] = []
 
     section       = doc.sections[0]
-    EMU_PER_DXA   = 635
+    EMU_PER_CM    = 360000  # 1 см = 360000 EMU
     tolerance_dxa = rules["tolerances"]["dxa"]
+    EMU_PER_DXA   = EMU_PER_CM / 567  # ~635 EMU в 1 DXA
 
     for margin_name, margin_emu in {
         "left":   section.left_margin,
@@ -327,8 +329,8 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
 
         is_service = any(s in title_lower for s in SERVICE_TITLES)
 
-        # ── С-3: H1 с новой страницы ──
-        if para.style.name == "Heading 1":
+        # ── С-3: H1 с новой страницы (только для глав, не для служебных разделов) ──
+        if para.style.name == "Heading 1" and not is_service:
             if not _has_page_break_before(para, para_idx, all_paragraphs):
                 errors.append(ReportError(
                     id=f"С-3-{para_idx}", code="С-3", type="formatting", severity="error",
@@ -551,6 +553,7 @@ def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
 
     # ── Т-1: подпись «Таблица N» над таблицей ──
     # FIX #8: ищем назад через пустые параграфы, до 5 непустых шагов
+    # FIX #7: используем search вместо match для поиска подписи в тексте параграфа
     table_caption_pattern = re.compile(r'^Таблица\s*\d+', re.IGNORECASE)
 
     for i, (etype, eidx, element) in enumerate(elements_flow):
@@ -578,7 +581,8 @@ def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
             if nonempty_steps > 5:
                 break      # слишком далеко
 
-            if table_caption_pattern.match(para_text):
+            # Проверяем, начинается ли текст с "Таблица N"
+            if table_caption_pattern.search(para_text):
                 caption_found = True
                 pPr   = pelement.find(qn('w:pPr'))
                 jc_el = pPr.find(qn('w:jc')) if pPr is not None else None

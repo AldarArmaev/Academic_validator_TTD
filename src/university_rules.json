@@ -50,10 +50,21 @@
     "заключение",
     "список литературы"
   ],
-  "chapter_heading_pattern": "^Глава \\d+\\.\\s.+",
-  "paragraph_heading_pattern": "^\\d+\\.\\d+(\\.\\d+)?\\s.+",
-  "stop_words_style": ["я ", "мне ", "мой ", "моя "],
-  "stop_words_colloquial": ["короче", "вообще-то", "на самом деле", "типа", "как бы"],
+  "chapter_heading_pattern": "^Глава\\s+(?:\\d+|[IVX]+)[.:]?\\s.+",
+  "paragraph_heading_pattern": "^\\d+\\.\\d+\\.?(?:\\.\\d+\\.?)?\\s.+",
+  "stop_words_style": [
+    "я ",
+    "мне ",
+    "мой ",
+    "моя "
+  ],
+  "stop_words_colloquial": [
+    "короче",
+    "вообще-то",
+    "на самом деле",
+    "типа",
+    "как бы"
+  ],
   "tolerances": {
     "dxa": 20,
     "pt": 0.5
