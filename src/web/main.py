@@ -4,7 +4,9 @@
 import json
 from pathlib import Path
 from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from docx import Document
 
 from src.schemas import ValidationReport
@@ -16,6 +18,11 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Монтируем статические файлы и шаблоны
+BASE_DIR = Path(__file__).parent
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
 
 # Загружаем правила валидации при старте приложения
 RULES_PATH = Path(__file__).parent.parent / "university_rules.json"
@@ -23,7 +30,14 @@ with open(RULES_PATH, "r", encoding="utf-8") as f:
     VALIDATION_RULES = json.load(f)
 
 
-@app.post("/validate", response_model=ValidationReport)
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    """Главная страница сервиса с интуитивным интерфейсом."""
+    with open(BASE_DIR / "templates" / "index.html", "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read())
+
+
+@app.post("/api/validate", response_model=ValidationReport)
 async def validate_work(file: UploadFile = File(...)):
     """
     Загрузить файл ВКР (.docx) и получить отчёт об ошибках.
@@ -124,20 +138,12 @@ def validate_format_from_document(doc: Document, rules: dict) -> ValidationRepor
     )
 
 
-@app.get("/")
-async def root():
-    """Главная страница сервиса."""
-    return {
-        "message": "ВКР Валидатор API",
-        "endpoints": {
-            "POST /validate": "Загрузить файл для валидации",
-            "GET /docs": "Swagger документация",
-            "GET /health": "Проверка здоровья сервиса"
-        }
-    }
-
-
 @app.get("/health")
 async def health_check():
     """Проверка работоспособности сервиса."""
     return {"status": "ok", "service": "ВКР Валидатор"}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
