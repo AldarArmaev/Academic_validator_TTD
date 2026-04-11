@@ -97,6 +97,22 @@ def _get_first_content_paragraph_index(doc: Document,
     return 0
 
 
+def _is_list_paragraph(para) -> bool:
+    """True если абзац является элементом маркированного или нумерованного списка."""
+    # Проверяем w:numPr — признак автоматического списка
+    pPr = para._p.pPr
+    if pPr is not None and pPr.find(qn('w:numPr')) is not None:
+        return True
+    # Проверяем ручные маркеры списков
+    text = para.text.strip()
+    if text.startswith(('-', '•', '◦', '▪', '‣', '⁃', '*')):
+        return True
+    # Проверяем ручную нумерацию (1., 2., а), б) и т.д.)
+    if re.match(r'^\d+[\.\)]\s', text) or re.match(r'^[а-яё]\)\s', text, re.IGNORECASE):
+        return True
+    return False
+
+
 def check_paragraph_formatting(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
     """Проверяет форматирование абзацев (Ф-2, Ф-3, Ф-5, Ф-6)."""
     errors: list[ReportError] = []
@@ -126,6 +142,9 @@ def check_paragraph_formatting(doc: Document, rules: dict[str, Any]) -> list[Rep
         ts = para.text.strip()
         if ts.startswith("Таблица") or ts.startswith("Рис.") or ts.startswith("Рисунок"):
             continue
+
+        # FIX #1 (Ф-5): пропускаем элементы списков — у них отступ задаётся через w:left, а не w:firstLine
+        is_list_item = _is_list_paragraph(para)
 
         pPr = para._p.pPr
 
@@ -180,34 +199,37 @@ def check_paragraph_formatting(doc: Document, rules: dict[str, Any]) -> list[Rep
                 ))
 
         # ── Ф-5: отступ первой строки ──
-        ind_el = pPr.find(qn('w:ind')) if pPr is not None else None
-        if ind_el is not None:
-            first_line = ind_el.get(qn('w:firstLine'))
-            if first_line is not None:
-                try:
-                    actual_fl = int(first_line)
-                    if abs(actual_fl - expected_first_line) > tolerance_dxa:
-                        errors.append(ReportError(
-                            id=f"Ф-5-{para_index}",
-                            code="Ф-5",
-                            type="formatting",
-                            severity="error",
-                            location=ErrorLocation(
-                                paragraph_index=para_index,
-                                structural_path=f"Абзац {para_index + 1}",
-                            ),
-                            fragment=para.text[:100],
-                            rule="Отступ первой строки — 1.25 см (720 DXA)",
-                            rule_citation="§4.2, с. 47",
-                            found_value=str(actual_fl),
-                            expected_value=str(expected_first_line),
-                            recommendation="Установите отступ первой строки 1.25 см",
-                        ))
-                except ValueError:
-                    pass
+        # FIX #1 (Ф-5): пропускаем элементы списков — у них отступ задаётся через w:left, а не w:firstLine
+        if not is_list_item:
+            ind_el = pPr.find(qn('w:ind')) if pPr is not None else None
+            if ind_el is not None:
+                first_line = ind_el.get(qn('w:firstLine'))
+                if first_line is not None:
+                    try:
+                        actual_fl = int(first_line)
+                        if abs(actual_fl - expected_first_line) > tolerance_dxa:
+                            errors.append(ReportError(
+                                id=f"Ф-5-{para_index}",
+                                code="Ф-5",
+                                type="formatting",
+                                severity="error",
+                                location=ErrorLocation(
+                                    paragraph_index=para_index,
+                                    structural_path=f"Абзац {para_index + 1}",
+                                ),
+                                fragment=para.text[:100],
+                                rule="Отступ первой строки — 1.25 см (720 DXA)",
+                                rule_citation="§4.2, с. 47",
+                                found_value=str(actual_fl),
+                                expected_value=str(expected_first_line),
+                                recommendation="Установите отступ первой строки 1.25 см",
+                            ))
+                    except ValueError:
+                        pass
 
         # ── Ф-6: интервалы до/после ──
-        if spacing_el is not None:
+        # FIX #2 (Ф-6): заголовки и элементы списков должны иметь отбивку, проверяем только основной текст
+        if not is_list_item and spacing_el is not None:
             for attr, label in [
                 (qn('w:before'), "перед абзацем"),
                 (qn('w:after'),  "после абзаца"),
@@ -313,10 +335,13 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
     all_paragraphs = doc.paragraphs
 
     def _effective_alignment(para) -> str | None:
+        """Получает эффективное выравнивание абзаца с учётом наследования от стиля."""
         pPr   = para._p.find(qn('w:pPr'))
         jc_el = pPr.find(qn('w:jc')) if pPr is not None else None
+        # FIX #3 (С-8): если есть явное w:jc, используем его
         if jc_el is not None:
             return jc_el.get(qn('w:val'))
+        # FIX #3 (С-8): если нет явного выравнивания, берём из стиля
         if para.style and para.style.paragraph_format:
             from docx.enum.text import WD_ALIGN_PARAGRAPH as WDA
             mapping = {WDA.CENTER: "center", WDA.LEFT: "left",
@@ -324,6 +349,7 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
             a = mapping.get(para.style.paragraph_format.alignment)
             if a:
                 return a
+        # FIX #3 (С-8): для заголовков по умолчанию возвращаем center
         if para.style and "Heading" in para.style.name:
             return "center"
         return None
@@ -1207,10 +1233,11 @@ def validate_typography_format(doc: Document, rules: dict[str, Any]) -> list[Rep
         text = para.text
 
         # Н-2: пробелы между инициалами
+        # FIX #6 (Н-2): понижаем severity до info, т.к. требование избыточно жёсткое
         m = no_space_pat.search(text)
         if m:
             errors.append(ReportError(
-                id=f"Н-2-{para_idx}", code="Н-2", type="style", severity="warning",
+                id=f"Н-2-{para_idx}", code="Н-2", type="style", severity="info",
                 location=ErrorLocation(paragraph_index=para_idx, structural_path=f"Абзац {para_idx+1}"),
                 fragment=text[:100],
                 rule="Между инициалами — пробел: И. И. Иванов",
@@ -1280,12 +1307,19 @@ def validate_typography_format(doc: Document, rules: dict[str, Any]) -> list[Rep
                 in_list = False
                 list_marker_type = None
 
-            # FIX #5: аббревиатуры — только вне библиографии
+            # FIX #4 (Н-6): аббревиатуры — проверяем с учётом всех найденных расшифровок
+            # Сначала собираем расшифровки из текущего абзаца
             for em in explained_pat.finditer(text):
                 found_abbrevs.add(em.group(0)[1:-1])
+            # Ищем расшифровки в формате «Полное название (АБВ)»
+            full_name_pattern = re.compile(r'([А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+)*)\s*\(([А-ЯЁ]{2,})\)')
+            for match in full_name_pattern.finditer(text):
+                found_abbrevs.add(match.group(2))
+            
             for am in abbrev_pat.finditer(text):
                 abbrev = am.group(0)
-                if abbrev not in found_abbrevs:
+                # FIX #4 (Н-6): проверяем наличие расшифровки во всём документе
+                if abbrev not in found_abbrevs and abbrev not in all_explained_abbrevs:
                     errors.append(ReportError(
                         id=f"Н-6-{para_idx}-{abbrev}", code="Н-6", type="style", severity="warning",
                         location=ErrorLocation(paragraph_index=para_idx, structural_path=f"Абзац {para_idx+1}"),
@@ -1295,7 +1329,7 @@ def validate_typography_format(doc: Document, rules: dict[str, Any]) -> list[Rep
                         found_value=abbrev, expected_value=f"полное название ({abbrev})",
                         recommendation=f"Расшифруйте {abbrev}",
                     ))
-                    found_abbrevs.add(abbrev)
+                found_abbrevs.add(abbrev)
 
     return errors
 
