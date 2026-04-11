@@ -70,6 +70,33 @@ def _is_line_spacing_15(line_val: int, line_rule: str | None, tolerance: int) ->
     return False
 
 
+def _has_different_first_page(doc: Document) -> bool:
+    """Проверяет, установлен ли флаг 'разная первая страница'."""
+    section = doc.sections[0]
+    return section._sectPr.titlePg is not None
+
+
+def _get_first_content_paragraph_index(doc: Document,
+                                        chapter_pat: str = CHAPTER_HEADING_PATTERN,
+                                        para_pat: str = PARAGRAPH_HEADING_PATTERN) -> int:
+    """Возвращает индекс первого содержательного абзаца (после титульного листа)."""
+    for i, para in enumerate(doc.paragraphs):
+        text = para.text.strip().lower()
+        # Ищем первый заголовок раздела или содержательный текст
+        if any(s in text for s in SERVICE_TITLES):
+            return i
+        if re.match(chapter_pat, para.text.strip()):
+            return i
+        if re.match(para_pat, para.text.strip()):
+            return i
+        # Если абзац не пустой и не является заголовком стиля
+        if para.text.strip() and para.style and "Heading" not in para.style.name:
+            # Проверяем, не является ли это просто пустым абзацем для форматирования
+            if len(para.text.strip()) > 1:
+                return i
+    return 0
+
+
 def check_paragraph_formatting(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
     """Проверяет форматирование абзацев (Ф-2, Ф-3, Ф-5, Ф-6)."""
     errors: list[ReportError] = []
@@ -81,7 +108,16 @@ def check_paragraph_formatting(doc: Document, rules: dict[str, Any]) -> list[Rep
     chapter_pat = rules.get("chapter_heading_pattern",   CHAPTER_HEADING_PATTERN)
     para_pat    = rules.get("paragraph_heading_pattern", PARAGRAPH_HEADING_PATTERN)
 
+    # FIX: если установлена опция "разная первая страница", пропускаем первую страницу
+    skip_first_page = _has_different_first_page(doc)
+    first_content_idx = 0
+    if skip_first_page:
+        first_content_idx = _get_first_content_paragraph_index(doc, chapter_pat, para_pat)
+
     for para_index, para in enumerate(doc.paragraphs):
+        # Пропускаем абзацы на первой странице, если установлен флаг different_first_page
+        if skip_first_page and para_index < first_content_idx:
+            continue
         # FIX #1: пропускаем ВСЕ заголовки — они проверяются в validate_structure
         if _is_heading_paragraph(para, chapter_pat, para_pat):
             continue
