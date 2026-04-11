@@ -24,10 +24,26 @@ def rules():
             "space_after_twips": 0
         },
         "margins_dxa": {"left": 1701, "right": 567, "top": 1134, "bottom": 1134},
-        "required_sections": ["введение", "заключение", "список литературы"],
+        "required_sections": [
+            "титульный лист",
+            "содержание",
+            "введение",
+            "Глава 1",
+            "Глава 2",
+            "заключение",
+            "список литературы"
+        ],
         "chapter_heading_pattern": "^Глава \\d+\\.\\s.+",
         "tolerances": {"dxa": 20, "pt": 0.5},
-        "references": {"min_sources": 40}
+        "references": {"min_sources": 40},
+        "volume": {
+            "total_chars_min": 90000,
+            "total_chars_max": 108000,
+            "theory_chapter_chars_min": 27000,
+            "theory_chapter_chars_max": 36000,
+            "empirical_chapter_chars_min": 45000,
+            "empirical_chapter_chars_max": 54000
+        },
     }
 
 
@@ -114,6 +130,48 @@ def wrong_heading_period_docx():
 @pytest.fixture
 def wrong_C_10_subheading_in_paragraph_docx():
     return FIXTURES_DIR / "structure" / "wrong_C_10_subheading_in_paragraph.docx"
+
+
+@pytest.fixture
+def wrong_C_1_missing_title_page_docx():
+    """Нарушение С-1: отсутствует Титульный лист."""
+    return FIXTURES_DIR / "structure" / "wrong_C_1_missing_title_page.docx"
+
+
+@pytest.fixture
+def wrong_C_1_missing_table_of_contents_docx():
+    """Нарушение С-1: отсутствует Содержание."""
+    return FIXTURES_DIR / "structure" / "wrong_C_1_missing_table_of_contents.docx"
+
+
+@pytest.fixture
+def wrong_C_1_missing_introduction_docx():
+    """Нарушение С-1: отсутствует Введение."""
+    return FIXTURES_DIR / "structure" / "wrong_C_1_missing_introduction.docx"
+
+
+@pytest.fixture
+def wrong_C_1_missing_chapter1_docx():
+    """Нарушение С-1: отсутствует Глава 1."""
+    return FIXTURES_DIR / "structure" / "wrong_C_1_missing_chapter1.docx"
+
+
+@pytest.fixture
+def wrong_C_1_missing_chapter2_docx():
+    """Нарушение С-1: отсутствует Глава 2."""
+    return FIXTURES_DIR / "structure" / "wrong_C_1_missing_chapter2.docx"
+
+
+@pytest.fixture
+def wrong_C_1_missing_references_docx():
+    """Нарушение С-1: отсутствует Список литературы."""
+    return FIXTURES_DIR / "structure" / "wrong_C_1_missing_references.docx"
+
+
+@pytest.fixture
+def correct_C_1_all_sections_present_docx():
+    """Корректный документ: все разделы присутствуют."""
+    return FIXTURES_DIR / "structure" / "correct_C_1_all_sections_present.docx"
 
 
 # ── Фикстуры для тестов таблиц (Т-*) ──────────────────────────────────────────

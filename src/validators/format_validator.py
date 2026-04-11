@@ -1891,6 +1891,171 @@ def validate_references_format(doc: Document, rules: dict[str, Any]) -> list[Rep
     return errors
 
 
+def validate_volume(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
+    """
+    Проверяет объём работы по количеству знаков (Ф-11..Ф-13).
+    
+    Ф-11: Объём ВКР 90000–108000 знаков с пробелами
+    Ф-12: Теоретическая глава (Глава 1) 27000–36000 знаков
+    Ф-13: Эмпирическая глава (Глава 2) 45000–54000 знаков
+    """
+    errors: list[ReportError] = []
+    
+    # Получаем константы объёма из правил
+    volume_rules = rules.get("volume", {})
+    total_min = volume_rules.get("total_chars_min", 90000)
+    total_max = volume_rules.get("total_chars_max", 108000)
+    theory_min = volume_rules.get("theory_chapter_chars_min", 27000)
+    theory_max = volume_rules.get("theory_chapter_chars_max", 36000)
+    empirical_min = volume_rules.get("empirical_chapter_chars_min", 45000)
+    empirical_max = volume_rules.get("empirical_chapter_chars_max", 54000)
+    
+    # Собираем текст по разделам
+    heading_styles = {"Heading 1", "Heading 2"}
+    current_section = None
+    section_texts: dict[str, list[str]] = {}
+    all_text_parts: list[str] = []
+    
+    for para in doc.paragraphs:
+        if para.style and para.style.name in heading_styles:
+            title = para.text.strip()
+            if title.lower().startswith("глава 1"):
+                current_section = "Глава 1"
+            elif title.lower().startswith("глава 2"):
+                current_section = "Глава 2"
+            elif title.lower() in ["введение", "заключение", "список литературы", "содержание"]:
+                current_section = title.lower()
+            else:
+                current_section = title
+        elif para.text.strip():
+            all_text_parts.append(para.text)
+            if current_section:
+                if current_section not in section_texts:
+                    section_texts[current_section] = []
+                section_texts[current_section].append(para.text)
+    
+    # Ф-11: Проверка общего объёма
+    total_text = "".join(all_text_parts)
+    total_chars = len(total_text)
+    
+    if total_chars < total_min:
+        errors.append(ReportError(
+            id="Ф-11-below-min",
+            code="Ф-11",
+            type="formatting",
+            severity="error",
+            location=ErrorLocation(
+                paragraph_index=0,
+                structural_path="Документ целиком"
+            ),
+            fragment=f"Общий объём: {total_chars} знаков",
+            rule=f"Объём ВКР должен быть от {total_min} до {total_max} знаков с пробелами",
+            rule_citation="§4.1, с. 46",
+            found_value=str(total_chars),
+            expected_value=f"{total_min}-{total_max}",
+            recommendation=f"Добавьте текст. Не хватает {total_min - total_chars} знаков."
+        ))
+    elif total_chars > total_max:
+        errors.append(ReportError(
+            id="Ф-11-above-max",
+            code="Ф-11",
+            type="formatting",
+            severity="error",
+            location=ErrorLocation(
+                paragraph_index=0,
+                structural_path="Документ целиком"
+            ),
+            fragment=f"Общий объём: {total_chars} знаков",
+            rule=f"Объём ВКР должен быть от {total_min} до {total_max} знаков с пробелами",
+            rule_citation="§4.1, с. 46",
+            found_value=str(total_chars),
+            expected_value=f"{total_min}-{total_max}",
+            recommendation=f"Сократите текст. Превышение на {total_chars - total_max} знаков."
+        ))
+    
+    # Ф-12: Проверка теоретической главы (Глава 1)
+    chapter1_text = "".join(section_texts.get("Глава 1", []))
+    chapter1_chars = len(chapter1_text)
+    
+    if chapter1_chars > 0:  # Если глава 1 найдена
+        if chapter1_chars < theory_min:
+            errors.append(ReportError(
+                id="Ф-12-chapter1-below-min",
+                code="Ф-12",
+                type="formatting",
+                severity="error",
+                location=ErrorLocation(
+                    paragraph_index=0,
+                    structural_path="Глава 1"
+                ),
+                fragment=f"Глава 1: {chapter1_chars} знаков",
+                rule=f"Теоретическая глава должна содержать от {theory_min} до {theory_max} знаков",
+                rule_citation="§3.4, с. 23",
+                found_value=str(chapter1_chars),
+                expected_value=f"{theory_min}-{theory_max}",
+                recommendation=f"Расширьте Главу 1. Не хватает {theory_min - chapter1_chars} знаков."
+            ))
+        elif chapter1_chars > theory_max:
+            errors.append(ReportError(
+                id="Ф-12-chapter1-above-max",
+                code="Ф-12",
+                type="formatting",
+                severity="error",
+                location=ErrorLocation(
+                    paragraph_index=0,
+                    structural_path="Глава 1"
+                ),
+                fragment=f"Глава 1: {chapter1_chars} знаков",
+                rule=f"Теоретическая глава должна содержать от {theory_min} до {theory_max} знаков",
+                rule_citation="§3.4, с. 23",
+                found_value=str(chapter1_chars),
+                expected_value=f"{theory_min}-{theory_max}",
+                recommendation=f"Сократите Главу 1. Превышение на {chapter1_chars - theory_max} знаков."
+            ))
+    
+    # Ф-13: Проверка эмпирической главы (Глава 2)
+    chapter2_text = "".join(section_texts.get("Глава 2", []))
+    chapter2_chars = len(chapter2_text)
+    
+    if chapter2_chars > 0:  # Если глава 2 найдена
+        if chapter2_chars < empirical_min:
+            errors.append(ReportError(
+                id="Ф-13-chapter2-below-min",
+                code="Ф-13",
+                type="formatting",
+                severity="error",
+                location=ErrorLocation(
+                    paragraph_index=0,
+                    structural_path="Глава 2"
+                ),
+                fragment=f"Глава 2: {chapter2_chars} знаков",
+                rule=f"Эмпирическая глава должна содержать от {empirical_min} до {empirical_max} знаков",
+                rule_citation="§3.5, с. 30",
+                found_value=str(chapter2_chars),
+                expected_value=f"{empirical_min}-{empirical_max}",
+                recommendation=f"Расширьте Главу 2. Не хватает {empirical_min - chapter2_chars} знаков."
+            ))
+        elif chapter2_chars > empirical_max:
+            errors.append(ReportError(
+                id="Ф-13-chapter2-above-max",
+                code="Ф-13",
+                type="formatting",
+                severity="error",
+                location=ErrorLocation(
+                    paragraph_index=0,
+                    structural_path="Глава 2"
+                ),
+                fragment=f"Глава 2: {chapter2_chars} знаков",
+                rule=f"Эмпирическая глава должна содержать от {empirical_min} до {empirical_max} знаков",
+                rule_citation="§3.5, с. 30",
+                found_value=str(chapter2_chars),
+                expected_value=f"{empirical_min}-{empirical_max}",
+                recommendation=f"Сократите Главу 2. Превышение на {chapter2_chars - empirical_max} знаков."
+            ))
+    
+    return errors
+
+
 def validate_typography_format(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
     """
     Проверяет типографику текста.
@@ -2535,6 +2700,7 @@ def validate_format(docx_path: str, rules: dict[str, Any]) -> ValidationReport:
     errors.extend(validate_appendix(doc, rules))
     errors.extend(validate_repeated_references(doc, rules))
     errors.extend(validate_list_numbering(doc, rules))
+    errors.extend(validate_volume(doc, rules))
     
     # Подсчитываем статистику
     formatting_count = sum(1 for e in errors if e.type == "formatting")

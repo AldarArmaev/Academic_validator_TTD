@@ -5,18 +5,18 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Dependencies
-.venv/
-venv/
-env/
+# Testing
+.pytest_cache/
+.coverage
+coverage/
+
+# Logs
+*.log
+
+# Environment
 .env
 .env.local
 .env.*
-
-# Build artifacts
-build/
-dist/
-*.egg-info/
 
 # Editors
 .vscode/
@@ -24,15 +24,7 @@ dist/
 *.swp
 *.swo
 
-# Logs
-*.log
-
-# Coverage
-.coverage
-coverage/
-htmlcov/
-
-# Testing
-.pytest_cache/
-.mypy_cache/
+# Dependencies
+.venv/
+venv/
 ```
