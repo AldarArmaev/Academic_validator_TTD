@@ -380,7 +380,11 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
     appendix_ref_pat = re.compile(r'\(прил\.\s*\d+\)', re.IGNORECASE)
 
     for para_idx, para in enumerate(doc.paragraphs):
-        if not para.style or "Heading" not in para.style.name:
+        # Проверяем заголовки по стилю или по паттерну
+        is_heading_by_style = para.style and "Heading" in para.style.name
+        is_heading_by_pattern = _is_heading_paragraph(para, chapter_pat, para_pat)
+        
+        if not is_heading_by_style and not is_heading_by_pattern:
             continue
 
         title       = para.text.strip()
@@ -392,7 +396,7 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
         is_service = any(s in title_lower for s in SERVICE_TITLES)
 
         # ── С-3: H1 с новой страницы (только для глав, не для служебных разделов) ──
-        if para.style.name == "Heading 1" and not is_service:
+        if (para.style.name == "Heading 1" or is_heading_by_pattern) and not is_service:
             if not _has_page_break_before(para, para_idx, all_paragraphs):
                 errors.append(ReportError(
                     id=f"С-3-{para_idx}", code="С-3", type="formatting", severity="error",
@@ -1319,7 +1323,7 @@ def validate_typography_format(doc: Document, rules: dict[str, Any]) -> list[Rep
             for am in abbrev_pat.finditer(text):
                 abbrev = am.group(0)
                 # FIX #4 (Н-6): проверяем наличие расшифровки во всём документе
-                if abbrev not in found_abbrevs and abbrev not in all_explained_abbrevs:
+                if abbrev not in found_abbrevs:
                     errors.append(ReportError(
                         id=f"Н-6-{para_idx}-{abbrev}", code="Н-6", type="style", severity="warning",
                         location=ErrorLocation(paragraph_index=para_idx, structural_path=f"Абзац {para_idx+1}"),
