@@ -2062,7 +2062,9 @@ def validate_typography_format(doc: Document, rules: dict[str, Any]) -> list[Rep
     
     Н-2: пробелы между инициалами
     Н-4: кавычки-лапки
+    Н-5: тире вместо дефиса между датами/числами
     Н-6: аббревиатуры без расшифровки
+    Н-7: автоматическая нумерация списков и унифицированные маркеры
     """
     errors: list[ReportError] = []
     
@@ -2071,8 +2073,16 @@ def validate_typography_format(doc: Document, rules: dict[str, Any]) -> list[Rep
     wrong_quotes = re.compile(r'"[^"]*"')
     abbrev_pattern = re.compile(r'\b[А-ЯЁ]{2,}\b')
     explained_pattern = re.compile(r'\([А-ЯЁ]{2,}\)')
+    # Н-5: дефис между числами/датами (должно быть тире)
+    hyphen_between_numbers = re.compile(r'(\d)\s*-\s*(\d)')
+    # Н-7: ручная нумерация (цифра с точкой в начале абзаца)
+    manual_numbering_pattern = re.compile(r'^\s*\d+\.\s+')
+    # Н-7: разные маркеры списков
+    bullet_markers = ['•', '-', '◦', '▪', '‣', '⁃']
     
     found_abbrevs: set[str] = set()
+    in_list = False
+    list_marker_type = None
     
     for para_idx, para in enumerate(doc.paragraphs):
         text = para.text
@@ -2115,6 +2125,87 @@ def validate_typography_format(doc: Document, rules: dict[str, Any]) -> list[Rep
                 expected_value='«...»',
                 recommendation='Замените кавычки "..." на «...»'
             ))
+        
+        # Н-5: дефис вместо тире между числами/датами
+        hyphen_match = hyphen_between_numbers.search(text)
+        if hyphen_match:
+            errors.append(ReportError(
+                id=f"Н-5-{para_idx}",
+                code="Н-5",
+                type="style",
+                severity="warning",
+                location=ErrorLocation(
+                    paragraph_index=para_idx,
+                    structural_path=f"Абзац {para_idx + 1}"
+                ),
+                fragment=text[:100],
+                rule="Между числами/датами должно использоваться тире (–), а не дефис (-)",
+                rule_citation="§4.2, с. 48",
+                found_value=hyphen_match.group(0),
+                expected_value="число – число",
+                recommendation="Замените дефис на тире в диапазоне чисел/дат"
+            ))
+        
+        # Н-7: проверка ручной нумерации
+        if manual_numbering_pattern.match(text):
+            # Проверяем, есть ли у абзаца стиль списка
+            pPr = para._p.pPr
+            is_numbered = False
+            if pPr is not None:
+                numPr = pPr.find(qn('w:numPr'))
+                if numPr is not None:
+                    is_numbered = True
+            
+            if not is_numbered:
+                errors.append(ReportError(
+                    id=f"Н-7-manual-{para_idx}",
+                    code="Н-7",
+                    type="style",
+                    severity="warning",
+                    location=ErrorLocation(
+                        paragraph_index=para_idx,
+                        structural_path=f"Абзац {para_idx + 1}"
+                    ),
+                    fragment=text[:100],
+                    rule="Списки должны использовать автоматическую нумерацию, а не ручную",
+                    rule_citation="§4.2, с. 48",
+                    found_value="ручная нумерация",
+                    expected_value="автоматическая нумерация",
+                    recommendation="Используйте автоматическую нумерацию для списков"
+                ))
+        
+        # Н-7: проверка смешанных маркеров в списках
+        stripped_text = text.strip()
+        current_marker = None
+        for marker in bullet_markers:
+            if stripped_text.startswith(marker):
+                current_marker = marker
+                break
+        
+        if current_marker is not None:
+            if not in_list:
+                in_list = True
+                list_marker_type = current_marker
+            elif list_marker_type != current_marker:
+                errors.append(ReportError(
+                    id=f"Н-7-mixed-{para_idx}",
+                    code="Н-7",
+                    type="style",
+                    severity="warning",
+                    location=ErrorLocation(
+                        paragraph_index=para_idx,
+                        structural_path=f"Абзац {para_idx + 1}"
+                    ),
+                    fragment=text[:100],
+                    rule="В одном списке должны использоваться унифицированные маркеры",
+                    rule_citation="§4.2, с. 48",
+                    found_value=f"маркер '{current_marker}'",
+                    expected_value=f"единый маркер '{list_marker_type}'",
+                    recommendation="Используйте одинаковые маркеры во всём списке"
+                ))
+        else:
+            in_list = False
+            list_marker_type = None
         
         # Расшифровки аббревиатур
         for m in explained_pattern.finditer(text):

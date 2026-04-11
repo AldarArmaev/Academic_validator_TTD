@@ -776,3 +776,59 @@ def test_volume_chapters_boundaries_correct_no_error(rules, tmp_path):
     # Проверяем отсутствие ошибок по объёму
     volume_errors = [e for e in report.errors if e.code in ("Ф-11", "Ф-12", "Ф-13")]
     assert len(volume_errors) == 0, f"Ложное срабатывание проверок объёма: {volume_errors}"
+
+
+# ── Тесты на типографику (Н-*) ────────────────────────────────────────────────
+
+def test_N_5_hyphen_vs_dash_error(rules, wrong_N_5_hyphen_vs_dash_docx):
+    """Н-5: дефис вместо тире между датами."""
+    from src.validators.format_validator import validate_format
+
+    report = validate_format(str(wrong_N_5_hyphen_vs_dash_docx), rules)
+    errors = [e for e in report.errors if e.code == "Н-5"]
+    assert len(errors) >= 1, "Ошибка Н-5 (дефис вместо тире) не обнаружена"
+
+
+def test_N_5_dash_correct_no_error(rules, correct_N_5_dash_correct_docx):
+    """Н-5: корректное использование тире между датами."""
+    from src.validators.format_validator import validate_format
+
+    report = validate_format(str(correct_N_5_dash_correct_docx), rules)
+    errors = [e for e in report.errors if e.code == "Н-5"]
+    assert len(errors) == 0, f"Ложное срабатывание проверки Н-5: {errors}"
+
+
+def test_N_7_manual_list_numbering_error(rules, wrong_N_7_manual_list_numbering_docx):
+    """Н-7: ручная нумерация вместо автоматической."""
+    from src.validators.format_validator import validate_format
+
+    report = validate_format(str(wrong_N_7_manual_list_numbering_docx), rules)
+    errors = [e for e in report.errors if e.code == "Н-7"]
+    assert len(errors) >= 1, "Ошибка Н-7 (ручная нумерация) не обнаружена"
+
+
+def test_N_7_mixed_list_markers_error(rules, wrong_N_7_mixed_list_markers_docx):
+    """Н-7: разные маркеры в одном списке."""
+    from src.validators.format_validator import validate_format
+
+    report = validate_format(str(wrong_N_7_mixed_list_markers_docx), rules)
+    errors = [e for e in report.errors if e.code == "Н-7"]
+    assert len(errors) >= 1, "Ошибка Н-7 (смешанные маркеры) не обнаружена"
+
+
+def test_N_7_auto_numbering_correct_no_error(rules, correct_N_7_auto_numbering_docx):
+    """Н-7: корректная автоматическая нумерация списков."""
+    from src.validators.format_validator import validate_format
+
+    report = validate_format(str(correct_N_7_auto_numbering_docx), rules)
+    errors = [e for e in report.errors if e.code == "Н-7"]
+    assert len(errors) == 0, f"Ложное срабатывание проверки Н-7: {errors}"
+
+
+def test_N_7_unified_markers_correct_no_error(rules, correct_N_7_unified_markers_docx):
+    """Н-7: корректные унифицированные маркеры списков."""
+    from src.validators.format_validator import validate_format
+
+    report = validate_format(str(correct_N_7_unified_markers_docx), rules)
+    errors = [e for e in report.errors if e.code == "Н-7"]
+    assert len(errors) == 0, f"Ложное срабатывание проверки Н-7: {errors}"

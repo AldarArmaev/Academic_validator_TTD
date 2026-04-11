@@ -288,6 +288,44 @@ def wrong_abbreviation_docx():
     return FIXTURES_DIR / "typography" / "wrong_N_6_abbreviation.docx"
 
 
+@pytest.fixture
+def wrong_N_5_hyphen_vs_dash_docx():
+    """Нарушение Н-5: дефис вместо тире между датами."""
+    return FIXTURES_DIR / "typography" / "wrong_N_5_hyphen_vs_dash.docx"
+
+
+@pytest.fixture
+def wrong_N_7_manual_list_numbering_docx():
+    """Нарушение Н-7: ручная нумерация вместо автоматической."""
+    return FIXTURES_DIR / "typography" / "wrong_N_7_manual_list_numbering.docx"
+
+
+@pytest.fixture
+def wrong_N_7_mixed_list_markers_docx():
+    """Нарушение Н-7: разные маркеры в одном списке."""
+    return FIXTURES_DIR / "typography" / "wrong_N_7_mixed_list_markers.docx"
+
+
+# ── Фикстуры для корректных тестов типографики (Н-*) ──────────────────────────
+
+@pytest.fixture
+def correct_N_5_dash_correct_docx():
+    """Корректное использование тире между датами."""
+    return FIXTURES_DIR / "typography" / "correct_N_5_dash_correct.docx"
+
+
+@pytest.fixture
+def correct_N_7_auto_numbering_docx():
+    """Корректная автоматическая нумерация списков."""
+    return FIXTURES_DIR / "typography" / "correct_N_7_auto_numbering.docx"
+
+
+@pytest.fixture
+def correct_N_7_unified_markers_docx():
+    """Корректные унифицированные маркеры списков."""
+    return FIXTURES_DIR / "typography" / "correct_N_7_unified_markers.docx"
+
+
 # ── Дополнительные фикстуры для списка литературы (Л-*) ───────────────────────
 
 @pytest.fixture
