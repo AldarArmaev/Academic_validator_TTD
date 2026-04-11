@@ -16,15 +16,14 @@ coverage/
 # Environment
 .env
 .env.local
-.env.*
+*.env.*
 
-# Editors
-.vscode/
-.idea/
+# Temporary files
+*.tmp
 *.swp
 *.swo
 
-# Dependencies
-.venv/
-venv/
+# OS generated files
+.DS_Store
+Thumbs.db
 ```
