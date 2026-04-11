@@ -9,6 +9,7 @@ __pycache__/
 .pytest_cache/
 .coverage
 coverage/
+htmlcov/
 
 # Logs
 *.log
@@ -16,13 +17,14 @@ coverage/
 # Environment
 .env
 .env.local
-.env.*
+*.env.*
 
 # Editors
 .vscode/
 .idea/
 *.swp
 *.swo
+*.tmp
 
 # Dependencies
 .venv/
