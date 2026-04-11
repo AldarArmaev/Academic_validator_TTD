@@ -370,3 +370,97 @@ def wrong_P_4_appendix_numbering_order_docx():
 def wrong_L_2_repeated_ref_format_docx():
     """Нарушение Л-2: повторная ссылка оформлена неправильно."""
     return FIXTURES_DIR / "references" / "wrong_L_2_repeated_ref_format.docx"
+
+
+# ── Фикстуры для корректных тестов приложений (П-*) ───────────────────────────
+
+@pytest.fixture
+def correct_P_1_appendix_new_page_docx():
+    """Корректное приложение: начинается с новой страницы."""
+    return FIXTURES_DIR / "structure" / "correct_document.docx"
+
+
+@pytest.fixture
+def correct_P_2_appendix_label_position_docx():
+    """Корректное приложение: надпись 'Приложение N' в правом верхнем углу."""
+    return FIXTURES_DIR / "structure" / "correct_document.docx"
+
+
+@pytest.fixture
+def correct_P_3_appendix_title_format_docx():
+    """Корректное приложение: название по центру, без точки."""
+    return FIXTURES_DIR / "structure" / "correct_document.docx"
+
+
+@pytest.fixture
+def correct_P_4_appendix_numbering_order_docx():
+    """Корректное приложение: нумерация в порядке ссылок."""
+    return FIXTURES_DIR / "structure" / "correct_document.docx"
+
+
+# ── Фикстуры для корректных тестов списка литературы (Л-*) ─────────────────────
+
+@pytest.fixture
+def correct_L_1_bracket_format_docx():
+    """Корректные ссылки: формат квадратных скобок [N] или [N, с. X]."""
+    return FIXTURES_DIR / "references" / "correct_document.docx"
+
+
+@pytest.fixture
+def correct_L_2_repeated_ref_format_docx():
+    """Корректные ссылки: повторная ссылка оформлена как [там же, с. X]."""
+    return FIXTURES_DIR / "references" / "correct_document.docx"
+
+
+@pytest.fixture
+def correct_L_3_multiple_order_docx():
+    """Корректные ссылки: множественные источники в арифметическом порядке."""
+    return FIXTURES_DIR / "references" / "correct_document.docx"
+
+
+@pytest.fixture
+def correct_L_4_alphabetical_order_docx():
+    """Корректный список литературы: алфавитный порядок, сначала русские."""
+    return FIXTURES_DIR / "references" / "correct_document.docx"
+
+
+@pytest.fixture
+def correct_L_5_numbering_docx():
+    """Корректный список литературы: сплошная нумерация."""
+    return FIXTURES_DIR / "references" / "correct_document.docx"
+
+
+@pytest.fixture
+def correct_L_7_min_sources_docx():
+    """Корректный список литературы: не менее 40 источников."""
+    return FIXTURES_DIR / "references" / "correct_document.docx"
+
+
+@pytest.fixture
+def correct_L_8_old_sources_docx():
+    """Корректный список литературы: основная часть источников за последние 10 лет."""
+    return FIXTURES_DIR / "references" / "correct_document.docx"
+
+
+@pytest.fixture
+def correct_L_9_author_format_docx():
+    """Корректный список литературы: формат автора 'Фамилия, И. О.'."""
+    return FIXTURES_DIR / "references" / "correct_document.docx"
+
+
+@pytest.fixture
+def correct_L_10_url_with_date_docx():
+    """Корректные URL-ссылки: с датой обращения (дата обращения: ДД.ММ.ГГГГ)."""
+    return FIXTURES_DIR / "references" / "correct_document.docx"
+
+
+@pytest.fixture
+def correct_L_11_all_references_valid_docx():
+    """Корректные ссылки: все ссылки [N] соответствуют источникам в списке."""
+    return FIXTURES_DIR / "references" / "correct_document.docx"
+
+
+@pytest.fixture
+def correct_L_12_dash_instead_of_hyphen_docx():
+    """Корректный список литературы: все тире длинные (–)."""
+    return FIXTURES_DIR / "references" / "correct_document.docx"
