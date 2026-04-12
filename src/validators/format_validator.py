@@ -153,6 +153,14 @@ def check_paragraph_formatting(doc: Document, rules: dict[str, Any]) -> list[Rep
         ts = para.text.strip()
         if ts.startswith("Таблица") or ts.startswith("Рис.") or ts.startswith("Рисунок"):
             continue
+        
+        # FIX: пропускаем названия приложений — они проверяются в validate_appendix
+        # Название приложения следует сразу после "Приложение N" и имеет выравнивание по центру
+        app_heading_pat = re.compile(r'^Приложение\s+([А-ЯЁA-Z\d])\s*$', re.IGNORECASE)
+        if para_index > 0:
+            prev_para = doc.paragraphs[para_index - 1]
+            if app_heading_pat.match(prev_para.text.strip()):
+                continue
 
         # FIX #1 (Ф-5): пропускаем элементы списков — у них отступ задаётся через w:left, а не w:firstLine
         is_list_item = _is_list_paragraph(para)
