@@ -153,6 +153,51 @@ def check_paragraph_formatting(doc: Document, rules: dict[str, Any]) -> list[Rep
         ts = para.text.strip()
         if ts.startswith("Таблица") or ts.startswith("Рис.") or ts.startswith("Рисунок"):
             continue
+        
+        # FIX: пропускаем названия приложений и названия таблиц в приложениях — они проверяются в validate_appendix
+        # Название приложения следует сразу после "Приложение N" и имеет выравнивание по центру
+        # Название таблицы в приложении следует после заголовка таблицы и также имеет выравнивание по центру
+        app_heading_pat = re.compile(r'^Приложение\s+([А-ЯЁA-Z\d])\s*$', re.IGNORECASE)
+        table_in_app_pat = re.compile(r'^Таблица\s+\d+[:\.]?\s*$', re.IGNORECASE)
+        
+        is_app_title = False
+        if para_index > 0:
+            prev_para = doc.paragraphs[para_index - 1]
+            # Проверяем, является ли текущий абзац названием приложения (следует после "Приложение N")
+            # Пропускаем пустые абзацы между "Приложение N" и названием
+            if app_heading_pat.match(prev_para.text.strip()):
+                is_app_title = True
+            # Проверяем, является ли текущий абзац названием таблицы в приложении
+            # Для этого ищем предыдущий заголовок "Таблица N" и проверяем, что перед ним было "Приложение N"
+            elif table_in_app_pat.match(prev_para.text.strip()):
+                # Ищем ближайшее "Приложение N" перед этой таблицей
+                for k in range(para_index - 2, -1, -1):
+                    prev_text = doc.paragraphs[k].text.strip()
+                    if app_heading_pat.match(prev_text):
+                        is_app_title = True
+                        break
+                    # Если встретили другой заголовок раздела или главу, прекращаем поиск
+                    if _is_heading_paragraph(doc.paragraphs[k], chapter_pat, para_pat):
+                        break
+        
+        # Дополнительная проверка: если текущий абзац непустой, ищем назад до первого непустого
+        # и проверяем, не является ли он названием приложения
+        if not is_app_title and para.text.strip():
+            for k in range(para_index - 1, -1, -1):
+                prev_text = doc.paragraphs[k].text.strip()
+                if not prev_text:
+                    continue  # пропускаем пустые абзацы
+                if app_heading_pat.match(prev_text):
+                    is_app_title = True
+                    break
+                # Если встретили другой заголовок или таблицу, прекращаем поиск
+                if _is_heading_paragraph(doc.paragraphs[k], chapter_pat, para_pat):
+                    break
+                if table_in_app_pat.match(prev_text):
+                    break
+        
+        if is_app_title:
+            continue
 
         # FIX #1 (Ф-5): пропускаем элементы списков — у них отступ задаётся через w:left, а не w:firstLine
         is_list_item = _is_list_paragraph(para)
@@ -489,8 +534,13 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
 
         # ── С-6: нумерация параграфов (только не-служебные H2/H3) ──
         # FIX #2: паттерн теперь принимает «2.1.» с точкой
+        # FIX #3: проверяем также параграфы, которые выглядят как заголовки параграфов по тексту,
+        # но имеют неправильный стиль (например, List Paragraph или Normal) — это ошибка
+        is_para_heading_by_pattern = bool(re.match(para_pat, title))
+        
+        # Если параграф имеет стиль H2/H3, но не соответствует паттерну нумерации — ошибка
         if para.style.name in ("Heading 2", "Heading 3") and not is_service:
-            if not re.match(para_pat, title):
+            if not is_para_heading_by_pattern:
                 errors.append(ReportError(
                     id=f"С-6-{para_idx}", code="С-6", type="formatting", severity="error",
                     location=ErrorLocation(
@@ -504,6 +554,22 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
                     expected_value="N.N. Название",
                     recommendation="Исправьте нумерацию параграфа",
                 ))
+        
+        # Если параграф выглядит как заголовок параграфа (1.1, 2.3 и т.д.), но не в стиле H2/H3 — ошибка
+        if is_para_heading_by_pattern and para.style.name not in ("Heading 2", "Heading 3") and not is_service:
+            errors.append(ReportError(
+                id=f"С-6-style-{para_idx}", code="С-6", type="formatting", severity="error",
+                location=ErrorLocation(
+                    paragraph_index=para_idx,
+                    structural_path=f"Параграф {para_idx + 1}",
+                ),
+                fragment=title[:100],
+                rule="Параграфы должны быть в стиле Heading 2",
+                rule_citation="§4.2, с. 47",
+                found_value=f"стиль={para.style.name}",
+                expected_value="Heading 2",
+                recommendation="Примените стиль «Заголовок 2» к параграфу",
+            ))
 
         # ── С-7: без bold/italic/underline ──
         if any(r.font.bold or r.font.italic or r.font.underline for r in para.runs):
@@ -523,7 +589,14 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
         # ── С-8: заголовки по центру ──
         # FIX #1: заголовки параграфов (2.1., 2.7. и т.д.) — тоже по центру,
         # а не по ширине. Ф-3 их пропускает, С-8 проверяет именно заголовки.
-        if _effective_alignment(para) != "center":
+        # FIX #2: «Приложение N» должно быть по правому краю, а не по центру
+        # FIX #3: «Таблица N» в приложениях должна быть по правому краю
+        app_heading_pat = re.compile(r'^Приложение\s+([А-ЯЁA-Z\d])\s*$', re.IGNORECASE)
+        table_heading_pat = re.compile(r'^Таблица\s+\d+[:\.]?\s*$', re.IGNORECASE)
+        is_app_heading = bool(app_heading_pat.match(title))
+        is_table_heading = bool(table_heading_pat.match(title))
+        
+        if not is_app_heading and not is_table_heading and _effective_alignment(para) != "center":
             errors.append(ReportError(
                 id=f"С-8-{para_idx}", code="С-8", type="formatting", severity="error",
                 location=ErrorLocation(
@@ -1577,6 +1650,57 @@ def validate_appendix(doc: Document, rules: dict[str, Any]) -> list[ReportError]
                         found_value=nt[-10:], expected_value="без точки",
                         recommendation="Удалите точку",
                     ))
+                
+                # Проверка отсутствия абзацного отступа (первой строки)
+                pPr = np_._p.find(qn('w:pPr'))
+                if pPr is not None:
+                    ind_el = pPr.find(qn('w:ind'))
+                    if ind_el is not None:
+                        first_line = ind_el.get(qn('w:firstLine'))
+                        if first_line is not None:
+                            try:
+                                fl_val = int(first_line)
+                                if fl_val != 0:
+                                    errors.append(ReportError(
+                                        id=f"П-3-indent-{j}", code="П-3", type="formatting", severity="error",
+                                        location=ErrorLocation(paragraph_index=j, structural_path=f"Название прил. {letter}"),
+                                        fragment=nt[:100],
+                                        rule="Название приложения без абзацного отступа",
+                                        rule_citation="§4.6, с. 59",
+                                        found_value=f"{fl_val} DXA", expected_value="0",
+                                        recommendation="Установите отступ первой строки = 0",
+                                    ))
+                            except ValueError:
+                                pass
+                
+                # Проверка шрифта: 14 пт, без жирного
+                for run in np_.runs:
+                    if not run.text.strip():
+                        continue
+                    # Проверка размера шрифта
+                    if run.font.size is not None:
+                        font_size_pt = run.font.size.pt
+                        if abs(font_size_pt - 14) > 0.5:
+                            errors.append(ReportError(
+                                id=f"П-3-size-{j}", code="П-3", type="formatting", severity="error",
+                                location=ErrorLocation(paragraph_index=j, structural_path=f"Название прил. {letter}"),
+                                fragment=nt[:100],
+                                rule="Название приложения — 14 кегль",
+                                rule_citation="§4.6, с. 59",
+                                found_value=f"{font_size_pt} пт", expected_value="14 пт",
+                                recommendation="Установите размер шрифта 14 пт",
+                            ))
+                    # Проверка жирности
+                    if run.font.bold:
+                        errors.append(ReportError(
+                            id=f"П-3-bold-{j}", code="П-3", type="formatting", severity="error",
+                            location=ErrorLocation(paragraph_index=j, structural_path=f"Название прил. {letter}"),
+                            fragment=nt[:100],
+                            rule="Название приложения без жирного шрифта",
+                            rule_citation="§4.6, с. 59",
+                            found_value="bold", expected_value="обычный",
+                            recommendation="Уберите жирное начертание",
+                        ))
 
         appendices.append({"idx": i, "letter": letter})
 
