@@ -817,10 +817,11 @@ def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
                         found_value=para_text[-10:], expected_value="без точки",
                         recommendation="Удалите точку",
                     ))
+                # Нашли подпись, но продолжаем проверять, что между ней и таблицей
+                # нет других значимых параграфов (кроме названия таблицы)
                 break
-            else:
-                # Нашли непустой параграф — но это не подпись, дальше не ищем
-                break
+            # Если это не подпись "Таблица N", просто продолжаем поиск назад
+            # (это может быть название таблицы между подписью и самой таблицей)
 
         if not caption_found:
             errors.append(ReportError(
