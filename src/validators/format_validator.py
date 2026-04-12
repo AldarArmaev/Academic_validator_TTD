@@ -1577,6 +1577,57 @@ def validate_appendix(doc: Document, rules: dict[str, Any]) -> list[ReportError]
                         found_value=nt[-10:], expected_value="без точки",
                         recommendation="Удалите точку",
                     ))
+                
+                # Проверка отсутствия абзацного отступа (первой строки)
+                pPr = np_._p.find(qn('w:pPr'))
+                if pPr is not None:
+                    ind_el = pPr.find(qn('w:ind'))
+                    if ind_el is not None:
+                        first_line = ind_el.get(qn('w:firstLine'))
+                        if first_line is not None:
+                            try:
+                                fl_val = int(first_line)
+                                if fl_val != 0:
+                                    errors.append(ReportError(
+                                        id=f"П-3-indent-{j}", code="П-3", type="formatting", severity="error",
+                                        location=ErrorLocation(paragraph_index=j, structural_path=f"Название прил. {letter}"),
+                                        fragment=nt[:100],
+                                        rule="Название приложения без абзацного отступа",
+                                        rule_citation="§4.6, с. 59",
+                                        found_value=f"{fl_val} DXA", expected_value="0",
+                                        recommendation="Установите отступ первой строки = 0",
+                                    ))
+                            except ValueError:
+                                pass
+                
+                # Проверка шрифта: 14 пт, без жирного
+                for run in np_.runs:
+                    if not run.text.strip():
+                        continue
+                    # Проверка размера шрифта
+                    if run.font.size is not None:
+                        font_size_pt = run.font.size.pt
+                        if abs(font_size_pt - 14) > 0.5:
+                            errors.append(ReportError(
+                                id=f"П-3-size-{j}", code="П-3", type="formatting", severity="error",
+                                location=ErrorLocation(paragraph_index=j, structural_path=f"Название прил. {letter}"),
+                                fragment=nt[:100],
+                                rule="Название приложения — 14 кегль",
+                                rule_citation="§4.6, с. 59",
+                                found_value=f"{font_size_pt} пт", expected_value="14 пт",
+                                recommendation="Установите размер шрифта 14 пт",
+                            ))
+                    # Проверка жирности
+                    if run.font.bold:
+                        errors.append(ReportError(
+                            id=f"П-3-bold-{j}", code="П-3", type="formatting", severity="error",
+                            location=ErrorLocation(paragraph_index=j, structural_path=f"Название прил. {letter}"),
+                            fragment=nt[:100],
+                            rule="Название приложения без жирного шрифта",
+                            rule_citation="§4.6, с. 59",
+                            found_value="bold", expected_value="обычный",
+                            recommendation="Уберите жирное начертание",
+                        ))
 
         appendices.append({"idx": i, "letter": letter})
 

@@ -1,4 +1,29 @@
 ```
+# Python cache
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+# Test coverage
+.coverage
+htmlcov/
+.coverage.*
+.coverage-*
+
+# Pytest
+.pytest_cache/
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+.env.*
+
+# Dependencies
+.venv/
+venv/
+*.egg-info/
 ```
