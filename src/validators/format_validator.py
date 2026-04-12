@@ -213,6 +213,7 @@ def check_paragraph_formatting(doc: Document, rules: dict[str, Any]) -> list[Rep
                 try:
                     actual = int(line_val)
                     if not _is_line_spacing_15(actual, line_rule, tolerance_dxa):
+                        page_num = _get_paragraph_page_number(para_index, doc.paragraphs)
                         errors.append(ReportError(
                             id=f"Ф-2-{para_index}",
                             code="Ф-2",
@@ -221,6 +222,7 @@ def check_paragraph_formatting(doc: Document, rules: dict[str, Any]) -> list[Rep
                             location=ErrorLocation(
                                 paragraph_index=para_index,
                                 structural_path=f"Абзац {para_index + 1}",
+                                page_num=page_num,
                             ),
                             fragment=para.text[:100],
                             rule="Межстрочный интервал — 1.5",
@@ -237,6 +239,7 @@ def check_paragraph_formatting(doc: Document, rules: dict[str, Any]) -> list[Rep
         if jc_el is not None:
             alignment = jc_el.get(qn('w:val'))
             if alignment != "both":
+                page_num = _get_paragraph_page_number(para_index, doc.paragraphs)
                 errors.append(ReportError(
                     id=f"Ф-3-{para_index}",
                     code="Ф-3",
@@ -245,6 +248,7 @@ def check_paragraph_formatting(doc: Document, rules: dict[str, Any]) -> list[Rep
                     location=ErrorLocation(
                         paragraph_index=para_index,
                         structural_path=f"Абзац {para_index + 1}",
+                        page_num=page_num,
                     ),
                     fragment=para.text[:100],
                     rule="Основной текст выровнен по ширине",
@@ -264,6 +268,7 @@ def check_paragraph_formatting(doc: Document, rules: dict[str, Any]) -> list[Rep
                     try:
                         actual_fl = int(first_line)
                         if abs(actual_fl - expected_first_line) > tolerance_dxa:
+                            page_num = _get_paragraph_page_number(para_index, doc.paragraphs)
                             errors.append(ReportError(
                                 id=f"Ф-5-{para_index}",
                                 code="Ф-5",
@@ -272,6 +277,7 @@ def check_paragraph_formatting(doc: Document, rules: dict[str, Any]) -> list[Rep
                                 location=ErrorLocation(
                                     paragraph_index=para_index,
                                     structural_path=f"Абзац {para_index + 1}",
+                                    page_num=page_num,
                                 ),
                                 fragment=para.text[:100],
                                 rule="Отступ первой строки — 1.25 см (720 DXA)",
@@ -296,6 +302,7 @@ def check_paragraph_formatting(doc: Document, rules: dict[str, Any]) -> list[Rep
                         sp = int(val)
                         if sp != expected_ba:
                             side = "before" if "before" in attr else "after"
+                            page_num = _get_paragraph_page_number(para_index, doc.paragraphs)
                             errors.append(ReportError(
                                 id=f"Ф-6-{side}-{para_index}",
                                 code="Ф-6",
@@ -304,6 +311,7 @@ def check_paragraph_formatting(doc: Document, rules: dict[str, Any]) -> list[Rep
                                 location=ErrorLocation(
                                     paragraph_index=para_index,
                                     structural_path=f"Абзац {para_index + 1}",
+                                    page_num=page_num,
                                 ),
                                 fragment=para.text[:100],
                                 rule="Интервалы до/после абзаца — 0",
@@ -418,6 +426,47 @@ def _has_page_break_before(para, para_idx: int, all_paragraphs) -> bool:
     return False
 
 
+def _get_paragraph_page_number(para_idx: int, all_paragraphs) -> int:
+    """Возвращает номер страницы, на которой находится абзац.
+    
+    Подсчитывает разрывы страниц перед данным абзацем.
+    Первая страница = 1.
+    """
+    page_num = 1  # Начинаем с первой страницы
+    
+    for k in range(para_idx + 1):  # Проверяем включая текущий абзац
+        p = all_paragraphs[k]._p
+        
+        # Проверяем w:pageBreakBefore в pPr
+        pPr = p.find(qn('w:pPr'))
+        if pPr is not None:
+            pb = pPr.find(qn('w:pageBreakBefore'))
+            if pb is not None:
+                val = pb.get(qn('w:val'))
+                if val is None or val in ('1', 'true', 'on'):
+                    if k <= para_idx:
+                        page_num += 1
+                        continue  # Не считаем текст этого абзаца на предыдущей странице
+        
+        # Проверяем w:br type="page" внутри runs
+        for br in p.iter(qn('w:br')):
+            if br.get(qn('w:type')) == 'page':
+                if k < para_idx or (k == para_idx and all_paragraphs[k].text.strip()):
+                    # Разрыв внутри абзаца — всё до разрыва на текущей странице, после — на следующей
+                    # Для простоты считаем, что абзац с разрывом начинается на текущей странице
+                    if k < para_idx:
+                        page_num += 1
+                    break
+        
+        # Проверяем w:lastRenderedPageBreak
+        for lrb in p.iter(qn('w:lastRenderedPageBreak')):
+            if k < para_idx:
+                page_num += 1
+            break
+    
+    return page_num
+
+
 def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
     """Проверяет структуру документа (С-1..С-10)."""
     errors: list[ReportError] = []
@@ -496,11 +545,13 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
         is_chapter = is_chapter_by_style or is_chapter_by_pattern
         if is_chapter and not is_service:
             if not _has_page_break_before(para, para_idx, all_paragraphs):
+                page_num = _get_paragraph_page_number(para_idx, all_paragraphs)
                 errors.append(ReportError(
                     id=f"С-3-{para_idx}", code="С-3", type="formatting", severity="error",
                     location=ErrorLocation(
                         paragraph_index=para_idx,
                         structural_path=f"Заголовок «{title[:50]}»",
+                        page_num=page_num,
                     ),
                     fragment=title[:100],
                     rule="Раздел начинается с новой страницы",
@@ -538,11 +589,13 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
                 
                 # Выдаем ошибку только если разрыв страницы НЕ после главы
                 if not is_after_chapter:
+                    page_num = _get_paragraph_page_number(para_idx, all_paragraphs)
                     errors.append(ReportError(
                         id=f"С-4-{para_idx}", code="С-4", type="formatting", severity="error",
                         location=ErrorLocation(
                             paragraph_index=para_idx,
                             structural_path=f"Параграф «{title[:50]}»",
+                            page_num=page_num,
                         ),
                         fragment=title[:100],
                         rule="Параграфы не начинаются с новой страницы",

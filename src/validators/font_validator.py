@@ -55,7 +55,8 @@ def check_font_formatting(doc: Document, rules: dict[str, Any]) -> list[ReportEr
                     location=ErrorLocation(
                         paragraph_index=para_index,
                         structural_path=f"Абзац {para_index + 1}",
-                        chapter=None
+                        chapter=None,
+                        page_num=None  # TODO: добавить подсчёт страницы
                     ),
                     fragment=fragment,
                     rule="Шрифт основного текста должен быть Times New Roman, 14 пт",
@@ -78,7 +79,8 @@ def check_font_formatting(doc: Document, rules: dict[str, Any]) -> list[ReportEr
                         location=ErrorLocation(
                             paragraph_index=para_index,
                             structural_path=f"Абзац {para_index + 1}",
-                            chapter=None
+                            chapter=None,
+                            page_num=None  # TODO: добавить подсчёт страницы
                         ),
                         fragment=fragment,
                         rule="Шрифт основного текста должен быть Times New Roman, 14 пт",

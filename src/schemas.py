@@ -8,6 +8,7 @@ class ErrorLocation(BaseModel):
     paragraph_index: int
     structural_path: str              # пример: «Глава 1 > Параграф 1.2»
     chapter: Optional[str] = None
+    page_num: Optional[int] = None    # номер страницы в документе
 
 
 class ReportError(BaseModel):
