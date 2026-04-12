@@ -412,26 +412,26 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
                     recommendation="Добавьте Ctrl+Enter перед заголовком",
                 ))
 
-        # ── С-4: H2/H3 НЕ с новой страницы ──
-        if para.style.name in ("Heading 2", "Heading 3"):
-            pPr  = para._p.find(qn('w:pPr'))
-            pb_e = pPr.find(qn('w:pageBreakBefore')) if pPr is not None else None
-            if pb_e is not None:
-                val = pb_e.get(qn('w:val'))
-                if val is None or val in ('1', 'true', 'on'):
-                    errors.append(ReportError(
-                        id=f"С-4-{para_idx}", code="С-4", type="formatting", severity="error",
-                        location=ErrorLocation(
-                            paragraph_index=para_idx,
-                            structural_path=f"Параграф «{title[:50]}»",
-                        ),
-                        fragment=title[:100],
-                        rule="Параграфы не начинаются с новой страницы",
-                        rule_citation="§4.2, с. 47",
-                        found_value="есть pageBreakBefore",
-                        expected_value="нет",
-                        recommendation="Уберите «С новой страницы» у параграфа",
-                    ))
+        # ── С-4: H2/H3 и параграфы НЕ с новой страницы ──
+        # Проверяем заголовки уровня H2/H3 или параграфы, распознанные по паттерну
+        is_paragraph_heading = (para.style.name in ("Heading 2", "Heading 3") or 
+                                (is_heading_by_pattern and not is_service))
+        if is_paragraph_heading:
+            # Используем _has_page_break_before для проверки разрыва страницы
+            if _has_page_break_before(para, para_idx, all_paragraphs):
+                errors.append(ReportError(
+                    id=f"С-4-{para_idx}", code="С-4", type="formatting", severity="error",
+                    location=ErrorLocation(
+                        paragraph_index=para_idx,
+                        structural_path=f"Параграф «{title[:50]}»",
+                    ),
+                    fragment=title[:100],
+                    rule="Параграфы не начинаются с новой страницы",
+                    rule_citation="§4.2, с. 47",
+                    found_value="есть разрыв страницы",
+                    expected_value="нет",
+                    recommendation="Уберите «С новой страницы» у параграфа",
+                ))
 
         # ── С-5: формат заголовка главы (только не-служебные H1) ──
         if para.style.name == "Heading 1" and not is_service:
