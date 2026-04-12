@@ -407,7 +407,12 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
         is_service = any(s in title_lower for s in SERVICE_TITLES)
 
         # ── С-3: H1 с новой страницы (только для глав, не для служебных разделов) ──
-        if (para.style.name == "Heading 1" or is_heading_by_pattern) and not is_service:
+        # Глава = стиль Heading 1 ИЛИ паттерн главы (но не Heading 2/3)
+        is_chapter = (
+            para.style.name == "Heading 1" or 
+            (is_heading_by_pattern and para.style.name not in ("Heading 2", "Heading 3"))
+        )
+        if is_chapter and not is_service:
             if not _has_page_break_before(para, para_idx, all_paragraphs):
                 errors.append(ReportError(
                     id=f"С-3-{para_idx}", code="С-3", type="formatting", severity="error",
@@ -425,24 +430,46 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
 
         # ── С-4: H2/H3 НЕ с новой страницы ──
         if para.style.name in ("Heading 2", "Heading 3"):
+            # Проверяем pageBreakBefore в pPr
             pPr  = para._p.find(qn('w:pPr'))
             pb_e = pPr.find(qn('w:pageBreakBefore')) if pPr is not None else None
+            has_pbb = False
             if pb_e is not None:
                 val = pb_e.get(qn('w:val'))
                 if val is None or val in ('1', 'true', 'on'):
-                    errors.append(ReportError(
-                        id=f"С-4-{para_idx}", code="С-4", type="formatting", severity="error",
-                        location=ErrorLocation(
-                            paragraph_index=para_idx,
-                            structural_path=f"Параграф «{title[:50]}»",
-                        ),
-                        fragment=title[:100],
-                        rule="Параграфы не начинаются с новой страницы",
-                        rule_citation="§4.2, с. 47",
-                        found_value="есть pageBreakBefore",
-                        expected_value="нет",
-                        recommendation="Уберите «С новой страницы» у параграфа",
-                    ))
+                    has_pbb = True
+            
+            # Проверяем w:br type="page" в предыдущем абзаце
+            has_br_page = False
+            if para_idx > 0:
+                prev_p = all_paragraphs[para_idx - 1]._p
+                for br in prev_p.iter(qn('w:br')):
+                    if br.get(qn('w:type')) == 'page':
+                        has_br_page = True
+                        break
+            
+            # Проверяем w:lastRenderedPageBreak в предыдущем абзаце
+            has_lpb = False
+            if para_idx > 0:
+                prev_p = all_paragraphs[para_idx - 1]._p
+                for _ in prev_p.iter(qn('w:lastRenderedPageBreak')):
+                    has_lpb = True
+                    break
+            
+            if has_pbb or has_br_page or has_lpb:
+                errors.append(ReportError(
+                    id=f"С-4-{para_idx}", code="С-4", type="formatting", severity="error",
+                    location=ErrorLocation(
+                        paragraph_index=para_idx,
+                        structural_path=f"Параграф «{title[:50]}»",
+                    ),
+                    fragment=title[:100],
+                    rule="Параграфы не начинаются с новой страницы",
+                    rule_citation="§4.2, с. 47",
+                    found_value="есть разрыв страницы",
+                    expected_value="нет",
+                    recommendation="Уберите «С новой страницы» у параграфа",
+                ))
 
         # ── С-5: формат заголовка главы (только не-служебные H1) ──
         if para.style.name == "Heading 1" and not is_service:
