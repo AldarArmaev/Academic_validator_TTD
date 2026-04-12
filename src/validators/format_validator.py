@@ -48,6 +48,27 @@ def _is_heading_paragraph(para,
     tl = text.lower()
     if any(s in tl for s in SERVICE_TITLES):
         return True
+    
+    # Паттерн главы или параграфа должен применяться только к коротким заголовкам (одна строка)
+    # Заголовки обычно не содержат переносов строк и не слишком длинные
+    if '\n' in text:
+        return False  # Многострочный текст — это не заголовок
+    
+    # Ограничиваем длину заголовка (обычно заголовки не длиннее 60 символов)
+    # Это исключает обычные предложения которые могут начинаться с "число. число"
+    if len(text) > 60:
+        return False  # Слишком длинный текст — это не заголовок
+    
+    # Заголовки обычно не заканчиваются точкой (кроме сокращений типа "рис.", "гл.")
+    # Если текст заканчивается на ". " или просто ".", это скорее всего не заголовок
+    if text.endswith('.') and not re.search(r'\b(рис|гл|табл|см|т\.е|и\.т\.д)\.$', tl):
+        return False  # Заголовки не заканчиваются точкой
+    
+    # Заголовки не содержат запятых, точек с запятой (кроме случаев после номера)
+    # Паттерн параграфа уже учитывает точку после номера (2.1. или 2.1)
+    if ',' in text or ';' in text:
+        return False  # Заголовки обычно не содержат запятых и точек с запятой
+    
     if re.match(chapter_pat, text) or re.match(para_pat, text):
         return True
     return False
@@ -714,6 +735,52 @@ def validate_tables(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
                         found_value=para_text[-10:], expected_value="без точки",
                         recommendation="Удалите точку",
                     ))
+                
+                # ── Т-2: название таблицы по центру ──
+                # Проверяем следующий параграф после "Таблица N" - это название таблицы
+                if pidx + 1 < len(doc.paragraphs):
+                    next_para = doc.paragraphs[pidx + 1]
+                    next_text = next_para.text.strip()
+                    # Название таблицы должно содержать "таблица" и быть длиннее чем просто "Таблица N"
+                    if next_text and table_caption_pattern.search(next_text) and len(next_text) > 15:
+                        next_pPr = next_para._p.pPr
+                        next_jc_el = next_pPr.find(qn('w:jc')) if next_pPr is not None else None
+                        next_align = next_jc_el.get(qn('w:val')) if next_jc_el is not None else None
+                        if next_align != 'center':
+                            errors.append(ReportError(
+                                id=f"Т-2-title-align-{pidx+1}",
+                                code="Т-2",
+                                type="formatting",
+                                severity="error",
+                                location=ErrorLocation(
+                                    paragraph_index=pidx + 1,
+                                    structural_path=f"Название таблицы {eidx + 1}",
+                                ),
+                                fragment=next_text[:100],
+                                rule="Название таблицы — по центру",
+                                rule_citation="§4.5, с. 51",
+                                found_value=next_align or "не задано", expected_value="center",
+                                recommendation="Выровняйте название таблицы по центру",
+                            ))
+                        
+                        # ── Т-3: точка в конце названия таблицы ──
+                        if next_text.endswith('.'):
+                            errors.append(ReportError(
+                                id=f"Т-3-title-dot-{pidx+1}",
+                                code="Т-3",
+                                type="formatting",
+                                severity="error",
+                                location=ErrorLocation(
+                                    paragraph_index=pidx + 1,
+                                    structural_path=f"Название таблицы {eidx + 1}",
+                                ),
+                                fragment=next_text[:100],
+                                rule="В конце названия таблицы нет точки",
+                                rule_citation="§4.5, с. 51",
+                                found_value=next_text[-10:], expected_value="без точки",
+                                recommendation="Удалите точку в конце названия таблицы",
+                            ))
+                
                 break
             else:
                 # Нашли непустой параграф — но это не подпись, дальше не ищем
