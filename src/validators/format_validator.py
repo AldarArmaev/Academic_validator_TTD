@@ -503,6 +503,32 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
                 recommendation="Установите выравнивание по центру",
             ))
 
+        # ── С-8 (доп): проверка отсутствия абзацного отступа у заголовков ──
+        pPr = para._p.pPr
+        if pPr is not None:
+            ind_el = pPr.find(qn('w:ind'))
+            if ind_el is not None:
+                first_line = ind_el.get(qn('w:firstLine'))
+                if first_line is not None:
+                    try:
+                        fl_val = int(first_line)
+                        if fl_val != 0:
+                            errors.append(ReportError(
+                                id=f"С-8-indent-{para_idx}", code="С-8", type="formatting", severity="error",
+                                location=ErrorLocation(
+                                    paragraph_index=para_idx,
+                                    structural_path=f"Заголовок {para_idx + 1}",
+                                ),
+                                fragment=title[:100],
+                                rule="Заголовки без абзацного отступа",
+                                rule_citation="§3.3, с. 43",
+                                found_value=f"{fl_val} DXA",
+                                expected_value="0",
+                                recommendation="Уберите абзацный отступ у заголовка",
+                            ))
+                    except ValueError:
+                        pass
+
         # ── С-9: нет точки в конце заголовка ──
         if title.endswith('.'):
             errors.append(ReportError(
