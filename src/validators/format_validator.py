@@ -652,7 +652,15 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
                 found_value=title[:100], expected_value="N.N или текст",
                 recommendation="Добавьте нумерацию или оформите как текст",
             ))
+        # FIX: Заголовки уровня 3 с паттерном «Число.Число.Число. Текст» — допустимы (параграфы уровня 3)
+        # Проверяем только заголовки уровней 4-6 или заголовки уровня 3 без правильной нумерации
         if in_chapter and sn in ("Heading 3", "Heading 4", "Heading 5", "Heading 6") and title:
+            # Если это Heading 3, проверяем, соответствует ли он паттерну параграфа уровня 3
+            if sn == "Heading 3":
+                if re.match(r'^\d+\.\d+\.\d+', title):
+                    # Это корректный параграф уровня 3, пропускаем
+                    continue
+            # Для Heading 4-6 или Heading 3 без правильной нумерации — ошибка
             errors.append(ReportError(
                 id=f"С-10-sub-{para_idx}", code="С-10", type="formatting", severity="error",
                 location=ErrorLocation(
