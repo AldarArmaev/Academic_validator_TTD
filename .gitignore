@@ -1,19 +1,31 @@
 ```
-# Python cache
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
-# Coverage reports
-coverage/
-htmlcov/
-.coverage
-
 # Testing
 .pytest_cache/
-.hypothesis/
+.coverage
+coverage/
+htmlcov/
 
 # Logs
 *.log
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Dependencies
+.venv/
+venv/
 ```

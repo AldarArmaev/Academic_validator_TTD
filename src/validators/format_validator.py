@@ -358,8 +358,8 @@ def check_margins(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _has_page_break_before(para, para_idx: int, all_paragraphs) -> bool:
-    """True если перед абзацем есть разрыв страницы."""
-    # 1. w:pageBreakBefore в pPr абзаца
+    """True если перед абзацем есть разрыв страницы, относящийся к этому абзацу."""
+    # 1. w:pageBreakBefore в pPr самого абзаца
     pPr = para._p.find(qn('w:pPr'))
     if pPr is not None:
         pb = pPr.find(qn('w:pageBreakBefore'))
@@ -371,17 +371,50 @@ def _has_page_break_before(para, para_idx: int, all_paragraphs) -> bool:
     if para_idx == 0:
         return False
 
-    prev_p = all_paragraphs[para_idx - 1]._p
-
-    # 2. w:br type="page" внутри runs предыдущего абзаца
-    for br in prev_p.iter(qn('w:br')):
-        if br.get(qn('w:type')) == 'page':
-            return True
-
-    # 3. w:lastRenderedPageBreak
-    for _ in prev_p.iter(qn('w:lastRenderedPageBreak')):
-        return True
-
+    # FIX: ищем разрыв страницы в предыдущих абзацах, но останавливаемся на первом непустом
+    # Разрыв страницы относится к первому непустому абзацу ПОСЛЕ него
+    for k in range(para_idx - 1, -1, -1):
+        prev_p = all_paragraphs[k]._p
+        prev_text = all_paragraphs[k].text.strip()
+        
+        # 2. w:br type="page" внутри runs абзаца
+        for br in prev_p.iter(qn('w:br')):
+            if br.get(qn('w:type')) == 'page':
+                # Разрыв найден в абзаце k. Он относится к первому непустому абзацу после k.
+                # Если текущий абзац (para_idx) — первый непустой после k, то разрыв относится к нему.
+                # Проверяем, есть ли между k и para_idx другие непустые абзацы
+                has_non_empty_between = False
+                for m in range(k + 1, para_idx):
+                    if all_paragraphs[m].text.strip():
+                        has_non_empty_between = True
+                        break
+                
+                if not has_non_empty_between:
+                    # Между разрывом и текущим абзацем нет других непустых абзацев
+                    return True
+                else:
+                    # Есть другой непустой абзац между разрывом и текущим — разрыв относится к нему
+                    return False
+        
+        # 3. w:lastRenderedPageBreak
+        for _ in prev_p.iter(qn('w:lastRenderedPageBreak')):
+            # Аналогичная логика для lastRenderedPageBreak
+            has_non_empty_between = False
+            for m in range(k + 1, para_idx):
+                if all_paragraphs[m].text.strip():
+                    has_non_empty_between = True
+                    break
+            
+            if not has_non_empty_between:
+                return True
+            else:
+                return False
+        
+        # Если встретили непустой текстовый абзац до того, как нашли разрыв,
+        # значит разрыв (если он есть) относится к этому непустому абзацу, а не к текущему
+        if prev_text:
+            break
+    
     return False
 
 
@@ -452,11 +485,15 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
         is_service = any(s in title_lower for s in SERVICE_TITLES)
 
         # ── С-3: H1 с новой страницы (только для глав, не для служебных разделов) ──
-        # Глава = стиль Heading 1 ИЛИ паттерн главы (но не Heading 2/3)
-        is_chapter = (
-            para.style.name == "Heading 1" or 
-            (is_heading_by_pattern and para.style.name not in ("Heading 2", "Heading 3"))
+        # Глава = стиль Heading 1 ИЛИ паттерн главы (одна цифра, но не паттерн параграфа)
+        # Важно: паттерн параграфа (1.2, 2.1 и т.д.) НЕ должен считаться главой
+        is_chapter_by_style = para.style.name == "Heading 1"
+        is_chapter_by_pattern = (
+            is_heading_by_pattern and 
+            re.match(chapter_pat, title) and  # только паттерн главы, не параграфа
+            para.style.name not in ("Heading 2", "Heading 3")
         )
+        is_chapter = is_chapter_by_style or is_chapter_by_pattern
         if is_chapter and not is_service:
             if not _has_page_break_before(para, para_idx, all_paragraphs):
                 errors.append(ReportError(
@@ -475,37 +512,14 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
 
         # ── С-4: H2/H3 НЕ с новой страницы ──
         if para.style.name in ("Heading 2", "Heading 3"):
-            # Проверяем pageBreakBefore в pPr
-            pPr  = para._p.find(qn('w:pPr'))
-            pb_e = pPr.find(qn('w:pageBreakBefore')) if pPr is not None else None
-            has_pbb = False
-            if pb_e is not None:
-                val = pb_e.get(qn('w:val'))
-                if val is None or val in ('1', 'true', 'on'):
-                    has_pbb = True
-            
-            # Проверяем w:br type="page" в предыдущем абзаце
-            has_br_page = False
-            if para_idx > 0:
-                prev_p = all_paragraphs[para_idx - 1]._p
-                for br in prev_p.iter(qn('w:br')):
-                    if br.get(qn('w:type')) == 'page':
-                        has_br_page = True
-                        break
-            
-            # Проверяем w:lastRenderedPageBreak в предыдущем абзаце
-            has_lpb = False
-            if para_idx > 0:
-                prev_p = all_paragraphs[para_idx - 1]._p
-                for _ in prev_p.iter(qn('w:lastRenderedPageBreak')):
-                    has_lpb = True
-                    break
+            # Используем общую функцию проверки разрыва страницы
+            has_page_break = _has_page_break_before(para, para_idx, all_paragraphs)
             
             # FIX: если разрыв страницы есть, проверяем контекст
             # Если непосредственно перед этим параграфом идет заголовок главы (H1),
             # то разрыв страницы относится к главе, а не к параграфу — это допустимо
-            if has_pbb or has_br_page or has_lpb:
-                # Ищем предыдущий значимый заголовок
+            if has_page_break:
+                # Ищем предыдущий значимый непустой абзац
                 is_after_chapter = False
                 for k in range(para_idx - 1, -1, -1):
                     prev_para = all_paragraphs[k]
