@@ -1,1 +1,19 @@
-(src/validators/format_validator.py)
+```
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Coverage reports
+coverage/
+htmlcov/
+.coverage
+
+# Testing
+.pytest_cache/
+.hypothesis/
+
+# Logs
+*.log
+```
