@@ -1462,6 +1462,19 @@ def validate_appendix(doc: Document, rules: dict[str, Any]) -> list[ReportError]
         re.IGNORECASE,
     )
     all_paragraphs = doc.paragraphs
+    
+    # Собираем индексы названий приложений (абзацы сразу после "Приложение N")
+    appendix_title_indices: set[int] = set()
+    for i, para in enumerate(all_paragraphs):
+        if app_heading_pat.match(para.text.strip()):
+            j = i + 1
+            while j < len(all_paragraphs) and not all_paragraphs[j].text.strip():
+                j += 1
+            if j < len(all_paragraphs):
+                next_para = all_paragraphs[j]
+                next_text = next_para.text.strip()
+                if not app_heading_pat.match(next_text) and not (next_para.style and next_para.style.name == "Heading 1"):
+                    appendix_title_indices.add(j)
 
     def _align(para) -> str | None:
         pPr   = para._p.find(qn('w:pPr'))
@@ -1571,7 +1584,7 @@ def validate_appendix(doc: Document, rules: dict[str, Any]) -> list[ReportError]
                 recommendation="Добавьте приложения или исправьте ссылки",
             ))
 
-    return errors
+    return errors, appendix_title_indices
 
 
 def validate_repeated_references(doc: Document, rules: dict[str, Any]) -> list[ReportError]:
