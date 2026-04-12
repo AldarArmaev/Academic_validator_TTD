@@ -395,8 +395,11 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
 
         is_service = any(s in title_lower for s in SERVICE_TITLES)
 
-        # ── С-3: H1 с новой страницы (только для глав, не для служебных разделов) ──
-        if (para.style.name == "Heading 1" or is_heading_by_pattern) and not is_service:
+        # ── С-3: H1 с новой страницы (только для глав, не для служебных разделов и не для параграфов) ──
+        # Проверяем только Heading 1 или заголовки по паттерну главы "Глава X...", но НЕ параграфы "Число.Число..."
+        is_chapter_heading = (para.style.name == "Heading 1" or 
+                              (re.match(chapter_pat, title) and not is_service))
+        if is_chapter_heading:
             if not _has_page_break_before(para, para_idx, all_paragraphs):
                 errors.append(ReportError(
                     id=f"С-3-{para_idx}", code="С-3", type="formatting", severity="error",
@@ -413,9 +416,9 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
                 ))
 
         # ── С-4: H2/H3 и параграфы НЕ с новой страницы ──
-        # Проверяем заголовки уровня H2/H3 или параграфы, распознанные по паттерну
+        # Проверяем заголовки уровня H2/H3 или параграфы, распознанные по паттерну "Число.Число..."
         is_paragraph_heading = (para.style.name in ("Heading 2", "Heading 3") or 
-                                (is_heading_by_pattern and not is_service))
+                                (re.match(para_pat, title) and not is_service))
         if is_paragraph_heading:
             # Используем _has_page_break_before для проверки разрыва страницы
             if _has_page_break_before(para, para_idx, all_paragraphs):
