@@ -501,20 +501,42 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
                     has_lpb = True
                     break
             
+            # FIX: если разрыв страницы есть, проверяем контекст
+            # Если непосредственно перед этим параграфом идет заголовок главы (H1),
+            # то разрыв страницы относится к главе, а не к параграфу — это допустимо
             if has_pbb or has_br_page or has_lpb:
-                errors.append(ReportError(
-                    id=f"С-4-{para_idx}", code="С-4", type="formatting", severity="error",
-                    location=ErrorLocation(
-                        paragraph_index=para_idx,
-                        structural_path=f"Параграф «{title[:50]}»",
-                    ),
-                    fragment=title[:100],
-                    rule="Параграфы не начинаются с новой страницы",
-                    rule_citation="§4.2, с. 47",
-                    found_value="есть разрыв страницы",
-                    expected_value="нет",
-                    recommendation="Уберите «С новой страницы» у параграфа",
-                ))
+                # Ищем предыдущий значимый заголовок
+                is_after_chapter = False
+                for k in range(para_idx - 1, -1, -1):
+                    prev_para = all_paragraphs[k]
+                    if not prev_para.text.strip():
+                        continue  # пропускаем пустые абзацы
+                    # Если предыдущий непустой абзац — заголовок главы (H1)
+                    if prev_para.style.name == "Heading 1":
+                        is_after_chapter = True
+                        break
+                    # Если предыдущий непустой абзац — другой заголовок (H2/H3) или текст
+                    if prev_para.style.name in ("Heading 2", "Heading 3") or _is_heading_paragraph(prev_para, chapter_pat, para_pat):
+                        break
+                    # Если встретили обычный текст до заголовка — разрыв относится к текущему параграфу
+                    if prev_para.text.strip():
+                        break
+                
+                # Выдаем ошибку только если разрыв страницы НЕ после главы
+                if not is_after_chapter:
+                    errors.append(ReportError(
+                        id=f"С-4-{para_idx}", code="С-4", type="formatting", severity="error",
+                        location=ErrorLocation(
+                            paragraph_index=para_idx,
+                            structural_path=f"Параграф «{title[:50]}»",
+                        ),
+                        fragment=title[:100],
+                        rule="Параграфы не начинаются с новой страницы",
+                        rule_citation="§4.2, с. 47",
+                        found_value="есть разрыв страницы",
+                        expected_value="нет",
+                        recommendation="Уберите «С новой страницы» у параграфа",
+                    ))
 
         # ── С-5: формат заголовка главы (только не-служебные H1) ──
         if para.style.name == "Heading 1" and not is_service:
