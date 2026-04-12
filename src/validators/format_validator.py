@@ -47,8 +47,14 @@ def _is_heading_paragraph(para,
     if not text:
         return False
     tl = text.lower()
-    if any(s in tl for s in SERVICE_TITLES):
-        return True
+    
+    # FIX: проверяем служебные заголовки только как полные заголовки, а не как подстроку в тексте
+    # Служебный заголовок должен состоять ТОЛЬКО из ключевого слова (возможно с номером или буквой)
+    for service in SERVICE_TITLES:
+        # Точное совпадение или с номером/буквой (например, "Приложение 1", "Приложение А")
+        if re.match(rf'^{re.escape(service)}(\s+\d+)?(\s+[А-ЯA-Z])?$', tl, re.IGNORECASE):
+            return True
+    
     if re.match(chapter_pat, text) or re.match(para_pat, text):
         return True
     return False
