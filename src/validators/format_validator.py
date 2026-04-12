@@ -674,15 +674,28 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
                 found_value=title[:100], expected_value="N.N или текст",
                 recommendation="Добавьте нумерацию или оформите как текст",
             ))
-        # FIX: Заголовки уровня 3 с паттерном «Число.Число.Число. Текст» — допустимы (параграфы уровня 3)
-        # Проверяем только заголовки уровней 4-6 или заголовки уровня 3 без правильной нумерации
+        # FIX: Заголовки уровней 3-6 с правильной нумерацией — допустимы (параграфы соответствующего уровня)
+        # Проверяем только заголовки без правильной нумерации
         if in_chapter and sn in ("Heading 3", "Heading 4", "Heading 5", "Heading 6") and title:
-            # Если это Heading 3, проверяем, соответствует ли он паттерну параграфа уровня 3
-            if sn == "Heading 3":
-                if re.match(r'^\d+\.\d+\.\d+', title):
-                    # Это корректный параграф уровня 3, пропускаем
-                    continue
-            # Для Heading 4-6 или Heading 3 без правильной нумерации — ошибка
+            # Проверяем, соответствует ли заголовок паттерну нумерации для своего уровня
+            is_valid_numbered_heading = False
+            if sn == "Heading 3" and re.match(r'^\d+\.\d+\.\d+', title):
+                # Корректный параграф уровня 3 (2.1.1)
+                is_valid_numbered_heading = True
+            elif sn == "Heading 4" and re.match(r'^\d+\.\d+\.\d+\.\d+', title):
+                # Корректный параграф уровня 4 (2.1.1.1)
+                is_valid_numbered_heading = True
+            elif sn == "Heading 5" and re.match(r'^\d+\.\d+\.\d+\.\d+\.\d+', title):
+                # Корректный параграф уровня 5 (2.1.1.1.1)
+                is_valid_numbered_heading = True
+            elif sn == "Heading 6" and re.match(r'^\d+\.\d+\.\d+\.\d+\.\d+\.\d+', title):
+                # Корректный параграф уровня 6 (2.1.1.1.1.1)
+                is_valid_numbered_heading = True
+            
+            if is_valid_numbered_heading:
+                continue
+                
+            # Для заголовков без правильной нумерации — ошибка
             errors.append(ReportError(
                 id=f"С-10-sub-{para_idx}", code="С-10", type="formatting", severity="error",
                 location=ErrorLocation(
