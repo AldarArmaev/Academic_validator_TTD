@@ -501,7 +501,28 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
                     has_lpb = True
                     break
             
-            if has_pbb or has_br_page or has_lpb:
+            # FIX: если разрыв страницы стоит сразу после заголовка главы, это разрыв для главы, а не для параграфа
+            # Нужно проверить, является ли предыдущий непустой абзац заголовком главы
+            has_chapter_break = False
+            if has_br_page or has_lpb:
+                for k in range(para_idx - 1, -1, -1):
+                    prev_para = all_paragraphs[k]
+                    if not prev_para.text.strip():
+                        continue
+                    prev_text = prev_para.text.strip()
+                    # Проверяем, является ли предыдущий непустой абзац заголовком главы
+                    is_prev_chapter = (
+                        (prev_para.style and prev_para.style.name == "Heading 1") or 
+                        re.match(chapter_pat, prev_text)
+                    )
+                    if is_prev_chapter:
+                        has_chapter_break = True
+                        break
+                    # Если нашли другой заголовок параграфа, значит разрыв между параграфами — это ошибка
+                    if re.match(para_pat, prev_text):
+                        break
+            
+            if has_pbb or ((has_br_page or has_lpb) and not has_chapter_break):
                 errors.append(ReportError(
                     id=f"С-4-{para_idx}", code="С-4", type="formatting", severity="error",
                     location=ErrorLocation(
