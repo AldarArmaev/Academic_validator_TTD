@@ -534,8 +534,13 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
 
         # ── С-6: нумерация параграфов (только не-служебные H2/H3) ──
         # FIX #2: паттерн теперь принимает «2.1.» с точкой
+        # FIX #3: проверяем также параграфы, которые выглядят как заголовки параграфов по тексту,
+        # но имеют неправильный стиль (например, List Paragraph или Normal) — это ошибка
+        is_para_heading_by_pattern = bool(re.match(para_pat, title))
+        
+        # Если параграф имеет стиль H2/H3, но не соответствует паттерну нумерации — ошибка
         if para.style.name in ("Heading 2", "Heading 3") and not is_service:
-            if not re.match(para_pat, title):
+            if not is_para_heading_by_pattern:
                 errors.append(ReportError(
                     id=f"С-6-{para_idx}", code="С-6", type="formatting", severity="error",
                     location=ErrorLocation(
@@ -549,6 +554,22 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
                     expected_value="N.N. Название",
                     recommendation="Исправьте нумерацию параграфа",
                 ))
+        
+        # Если параграф выглядит как заголовок параграфа (1.1, 2.3 и т.д.), но не в стиле H2/H3 — ошибка
+        if is_para_heading_by_pattern and para.style.name not in ("Heading 2", "Heading 3") and not is_service:
+            errors.append(ReportError(
+                id=f"С-6-style-{para_idx}", code="С-6", type="formatting", severity="error",
+                location=ErrorLocation(
+                    paragraph_index=para_idx,
+                    structural_path=f"Параграф {para_idx + 1}",
+                ),
+                fragment=title[:100],
+                rule="Параграфы должны быть в стиле Heading 2",
+                rule_citation="§4.2, с. 47",
+                found_value=f"стиль={para.style.name}",
+                expected_value="Heading 2",
+                recommendation="Примените стиль «Заголовок 2» к параграфу",
+            ))
 
         # ── С-7: без bold/italic/underline ──
         if any(r.font.bold or r.font.italic or r.font.underline for r in para.runs):
@@ -568,7 +589,14 @@ def validate_structure(doc: Document, rules: dict[str, Any]) -> list[ReportError
         # ── С-8: заголовки по центру ──
         # FIX #1: заголовки параграфов (2.1., 2.7. и т.д.) — тоже по центру,
         # а не по ширине. Ф-3 их пропускает, С-8 проверяет именно заголовки.
-        if _effective_alignment(para) != "center":
+        # FIX #2: «Приложение N» должно быть по правому краю, а не по центру
+        # FIX #3: «Таблица N» в приложениях должна быть по правому краю
+        app_heading_pat = re.compile(r'^Приложение\s+([А-ЯЁA-Z\d])\s*$', re.IGNORECASE)
+        table_heading_pat = re.compile(r'^Таблица\s+\d+[:\.]?\s*$', re.IGNORECASE)
+        is_app_heading = bool(app_heading_pat.match(title))
+        is_table_heading = bool(table_heading_pat.match(title))
+        
+        if not is_app_heading and not is_table_heading and _effective_alignment(para) != "center":
             errors.append(ReportError(
                 id=f"С-8-{para_idx}", code="С-8", type="formatting", severity="error",
                 location=ErrorLocation(
