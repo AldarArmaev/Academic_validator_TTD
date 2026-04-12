@@ -80,20 +80,26 @@ def _get_first_content_paragraph_index(doc: Document,
                                         chapter_pat: str = CHAPTER_HEADING_PATTERN,
                                         para_pat: str = PARAGRAPH_HEADING_PATTERN) -> int:
     """Возвращает индекс первого содержательного абзаца (после титульного листа)."""
+    # Считаем что первая страница (титульник) заканчивается перед первым заголовком раздела
+    # или служебным разделом (введение, содержание и т.д.)
     for i, para in enumerate(doc.paragraphs):
         text = para.text.strip().lower()
-        # Ищем первый заголовок раздела или содержательный текст
+        # Ищем первый заголовок раздела или служебный раздел (введение, заключение и т.д.)
         if any(s in text for s in SERVICE_TITLES):
             return i
         if re.match(chapter_pat, para.text.strip()):
             return i
         if re.match(para_pat, para.text.strip()):
             return i
-        # Если абзац не пустой и не является заголовком стиля
-        if para.text.strip() and para.style and "Heading" not in para.style.name:
-            # Проверяем, не является ли это просто пустым абзацем для форматирования
-            if len(para.text.strip()) > 1:
-                return i
+    # Если не нашли заголовков разделов, начинаем проверку со второго абзаца (считая что первый - титульник)
+    # Пропускаем первый непустой абзац (титульник) и все пустые после него
+    found_first_non_empty = False
+    for i, para in enumerate(doc.paragraphs):
+        if para.text.strip():
+            if not found_first_non_empty:
+                found_first_non_empty = True
+                continue
+            return i
     return 0
 
 
@@ -124,14 +130,12 @@ def check_paragraph_formatting(doc: Document, rules: dict[str, Any]) -> list[Rep
     chapter_pat = rules.get("chapter_heading_pattern",   CHAPTER_HEADING_PATTERN)
     para_pat    = rules.get("paragraph_heading_pattern", PARAGRAPH_HEADING_PATTERN)
 
-    # FIX: если установлена опция "разная первая страница", пропускаем первую страницу
-    skip_first_page = _has_different_first_page(doc)
-    first_content_idx = 0
-    if skip_first_page:
-        first_content_idx = _get_first_content_paragraph_index(doc, chapter_pat, para_pat)
+    # Всегда пропускаем первую страницу (титульный лист)
+    skip_first_page = True
+    first_content_idx = _get_first_content_paragraph_index(doc, chapter_pat, para_pat)
 
     for para_index, para in enumerate(doc.paragraphs):
-        # Пропускаем абзацы на первой странице, если установлен флаг different_first_page
+        # Пропускаем абзацы на первой странице
         if skip_first_page and para_index < first_content_idx:
             continue
         # FIX #1: пропускаем ВСЕ заголовки — они проверяются в validate_structure
