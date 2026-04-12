@@ -154,13 +154,50 @@ def check_paragraph_formatting(doc: Document, rules: dict[str, Any]) -> list[Rep
         if ts.startswith("Таблица") or ts.startswith("Рис.") or ts.startswith("Рисунок"):
             continue
         
-        # FIX: пропускаем названия приложений — они проверяются в validate_appendix
+        # FIX: пропускаем названия приложений и названия таблиц в приложениях — они проверяются в validate_appendix
         # Название приложения следует сразу после "Приложение N" и имеет выравнивание по центру
+        # Название таблицы в приложении следует после заголовка таблицы и также имеет выравнивание по центру
         app_heading_pat = re.compile(r'^Приложение\s+([А-ЯЁA-Z\d])\s*$', re.IGNORECASE)
+        table_in_app_pat = re.compile(r'^Таблица\s+\d+[:\.]?\s*$', re.IGNORECASE)
+        
+        is_app_title = False
         if para_index > 0:
             prev_para = doc.paragraphs[para_index - 1]
+            # Проверяем, является ли текущий абзац названием приложения (следует после "Приложение N")
+            # Пропускаем пустые абзацы между "Приложение N" и названием
             if app_heading_pat.match(prev_para.text.strip()):
-                continue
+                is_app_title = True
+            # Проверяем, является ли текущий абзац названием таблицы в приложении
+            # Для этого ищем предыдущий заголовок "Таблица N" и проверяем, что перед ним было "Приложение N"
+            elif table_in_app_pat.match(prev_para.text.strip()):
+                # Ищем ближайшее "Приложение N" перед этой таблицей
+                for k in range(para_index - 2, -1, -1):
+                    prev_text = doc.paragraphs[k].text.strip()
+                    if app_heading_pat.match(prev_text):
+                        is_app_title = True
+                        break
+                    # Если встретили другой заголовок раздела или главу, прекращаем поиск
+                    if _is_heading_paragraph(doc.paragraphs[k], chapter_pat, para_pat):
+                        break
+        
+        # Дополнительная проверка: если текущий абзац непустой, ищем назад до первого непустого
+        # и проверяем, не является ли он названием приложения
+        if not is_app_title and para.text.strip():
+            for k in range(para_index - 1, -1, -1):
+                prev_text = doc.paragraphs[k].text.strip()
+                if not prev_text:
+                    continue  # пропускаем пустые абзацы
+                if app_heading_pat.match(prev_text):
+                    is_app_title = True
+                    break
+                # Если встретили другой заголовок или таблицу, прекращаем поиск
+                if _is_heading_paragraph(doc.paragraphs[k], chapter_pat, para_pat):
+                    break
+                if table_in_app_pat.match(prev_text):
+                    break
+        
+        if is_app_title:
+            continue
 
         # FIX #1 (Ф-5): пропускаем элементы списков — у них отступ задаётся через w:left, а не w:firstLine
         is_list_item = _is_list_paragraph(para)
